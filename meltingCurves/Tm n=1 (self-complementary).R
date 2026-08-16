@@ -1,5 +1,5 @@
 #Tm n=1 (self-complementary).R
-#This script fits TM data assuming D -> SS1 + SS1 (self-complementary)
+#This script fits TM data assuming D -> SS1 (monomolecular)
 #Written by: David Dubins 
 #Date: Jan 17, 2026
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
@@ -18,13 +18,13 @@
 attach(MeltingCurve)
 
 #Enter the lower and upper baselines for the spectroscopic data (Fit using MS Excel):
-Lint <- 1.438055444     #first guess for Lint
-Lslope <- 0.000979435   #first guess for Lslope
-Uint <- 1.58965671      #first guess for Uint
-Uslope <- 0.001000519   #first guess for Uslope
+Lint <- 1.438689416     #lower baseline intercept
+Lslope <- 0.000958356   #lower baseline slope
+Uint <- 1.600283171     #upper baseline intercept
+Uslope <- 0.000839927   #upper baseline slope
 
 #First calculate Alpha vs. Temperature curve
-#Alpha = (Upper baseline - alpha) / (upper baseline - lower baseline)
+#Alpha = (Upper baseline - Abs) / (Upper baseline - Lower baseline)
 Alpha <- ((Uint+Uslope*Temperature)-Abs)/((Uint+Uslope*Temperature)-(Lint+Lslope*Temperature))
 
 #Define the function to fit (self-complementary duplex melting)
@@ -43,14 +43,14 @@ chisq <- function(p) sum((Alpha - Alphafit(p[1],p[2]))^2)
 plot(Temperature,Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD (260 nm)")
 LowerBLfit <- Temperature * Lslope + Lint
 UpperBLfit <- Temperature * Uslope + Uint
-lines(spline(Temperature, LowerBLfit))
-lines(spline(Temperature, UpperBLfit))
+lines(spline(Temperature, LowerBLfit),col="red")
+lines(spline(Temperature, UpperBLfit),col="red")
 
 #Now guess the initial guesses for the parameter estimates on a new plot.
 plot(Temperature,Alpha,main="Fraction of Duplex vs. Temperature", xlab="Temperature (°C)", ylab = expression(alpha ~ "(fraction of duplex)"))
 #Play with these initial guesses until the fit gets close.
 g1 <- 48    #first guess for Tm.
-g2 <- -100  #first guess for DH in kJ/mol
+g2 <- -500  #first guess for DH in kJ/mol
 
 Alphafity <- Alphafit(g1,g2) # This is the model fit using our first guesses.
 lines(spline(Temperature, Alphafity)) # plot the model on the current graph.
@@ -80,8 +80,8 @@ lines(spline(Temperature, Absfity))
 LowerBLfit <- Temperature * Lslope + Lint
 UpperBLfit <- Temperature * Uslope + Uint
 lines(spline(Temperature, Absfity))
-lines(spline(Temperature, LowerBLfit))
-lines(spline(Temperature, UpperBLfit))
+lines(spline(Temperature, LowerBLfit),col="red")
+lines(spline(Temperature, UpperBLfit),col="red")
 
 #Calculate and report the correlation matrix: 
 #(off-diagonal elements > 0.7 --> too many parameters?)
@@ -89,7 +89,7 @@ cov.mat <- 2 * fit1$minimum / (length(Abs) - 2) * solve(fit1$hessian)
 cor.mat <- cov2cor(cov.mat)
 cor.mat
 
-#Calcualte and report the approximate standard errors of the parameter estimates:
+#Calculate and report the approximate standard errors of the parameter estimates:
 se <- sqrt(diag(cov.mat))
 se
 

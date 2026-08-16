@@ -19,10 +19,10 @@
 attach(MeltingCurve)
 
 #Enter the lower and upper baselines for the spectroscopic data (Fit using MS Excel):
-Lint <- 1.438055444     #first guess for Lint
-Lslope <- 0.000979435   #first guess for Lslope
-Uint <- 1.58965671      #first guess for Uint
-Uslope <- 0.001000519   #first guess for Uslope
+Lint <- 1.438055444     #lower baseline intercept
+Lslope <- 0.000979435   #lower baseline slope
+Uint <- 1.58965671      #upper baseline intercept
+Uslope <- 0.001000519   #upper baseline slope
 
 #First calculate Alpha vs. Temperature curve
 #Alpha = (Upper baseline - Alpha) / (upper baseline - lower baseline)
@@ -72,7 +72,7 @@ Alphafit <- function(Tm,DH) {
   
   #We need to do solve the roots (alpha) one point at a time:
   for(i in 1:points){
-    Kval <- (4/Ct)*exp(((-DH*1000)/(8.314*(Temperature[i]+273.15)))*(1-(Temperature[i]+273.15)/(Tm+273.15)))
+    Kval <- (1/Ct)*exp(((-DH*1000)/(8.314*(Temperature[i]+273.15)))*(1-(Temperature[i]+273.15)/(Tm+273.15)))
     a <- 1
     b <- -2 - (1/(Kval*Ct))
     c <- 1
@@ -97,8 +97,8 @@ chisq <- function(p) sum((Alpha - Alphafit(p[1],p[2]))^2)
 plot(Temperature,Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD (260 nm)")
 LowerBLfit <- Temperature * Lslope + Lint
 UpperBLfit <- Temperature * Uslope + Uint
-lines(spline(Temperature, LowerBLfit))
-lines(spline(Temperature, UpperBLfit))
+lines(spline(Temperature, LowerBLfit),col="red")
+lines(spline(Temperature, UpperBLfit),col="red")
 
 #Now guess the initial guesses for the parameter estimates on a new plot.
 plot(Temperature,Alpha,main="Fraction of Duplex vs. Temperature", xlab="Temperature (°C)", ylab = expression(alpha ~ "(fraction of duplex)"))
@@ -134,8 +134,8 @@ lines(spline(Temperature, Absfity))
 LowerBLfit <- Temperature * Lslope + Lint
 UpperBLfit <- Temperature * Uslope + Uint
 lines(spline(Temperature, Absfity))
-lines(spline(Temperature, LowerBLfit))
-lines(spline(Temperature, UpperBLfit))
+lines(spline(Temperature, LowerBLfit),col="red")
+lines(spline(Temperature, UpperBLfit),col="red")
 
 #Calculate and report the correlation matrix: 
 #(off-diagonal elements > 0.7 --> too many parameters?)
