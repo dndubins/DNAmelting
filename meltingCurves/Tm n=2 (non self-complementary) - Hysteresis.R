@@ -23,20 +23,20 @@
 # 7. Plot results
 
 #Read in the data (Temperature, Abs)
-#Uncomment the appropriate line below for your platform.
+#Uncomment the appropriate lines below for your platform.
 #Select the data in Excel, press Ctrl+C, then run the appropriate line.
 
 #Import the Heating Curve:
 #=========================
 #For PC:
-HC <- read.table(file="clipboard", header=TRUE)
+#HC <- read.table(file="clipboard", header=TRUE)
 #For MacOS:
 #HC <- read.table(pipe("pbpaste"), header=TRUE)
 
 #Import the Cooling Curve:
 #=========================
 #For PC:
-CC <- read.table(file="clipboard", header=TRUE)
+#CC <- read.table(file="clipboard", header=TRUE)
 #For MacOS:
 #CC <- read.table(pipe("pbpaste"), header=TRUE)
 
