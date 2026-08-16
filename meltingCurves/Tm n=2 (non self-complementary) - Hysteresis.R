@@ -5,7 +5,7 @@
 #Date: Jan 17, 2026
 #Last Updated: 14-Aug-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
-#Kinetics solved by: ChatGPT Luna, Claude.AI Sonnet 5
+#Kinetics solved by: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: polynom 1.4, deSolve
 #(Tools -> Install Packages -> select polynom, deSolve)
 #This program expects three columns of data:
