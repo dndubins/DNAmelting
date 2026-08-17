@@ -357,7 +357,8 @@ DNA_ODE <- function(time, state, parameters) {
   list(c(dalpha_dt)) # this is how we hand the derivative back to deSolve.
 }
 
-#DNA_ODE(0, c(alpha0), parms) # calculate the ODE at time zero. (System is at eq'm, should be zero)
+#This is just a check, not needed. But if it crashes, it's bad news!
+DNA_ODE(0, c(alpha0), parms) # calculate the ODE at time zero. (System is at eq'm, should be close to zero).
 
 #This is the structure of simulating a curve:
 #create a series of times (0 to 900 seconds)
@@ -368,8 +369,8 @@ DNA_ODE <- function(time, state, parameters) {
 #  func = DNA_ODE, # gives the solver the differential equation
 #  parms = parms # using parameters "parms" defined above
 #)
-#head(out)
-#tail(out)
+#head(out) # print top of curve
+#tail(out) # print bottom of curve
 
 # Make cooling curve fitting function:
 CC_fitAlpha <- function(p1,p2){
@@ -486,9 +487,9 @@ ln_k0_on
 DH
 Ea_on-Ea_off
 
-# ============================================================
-# Summary table of fitting results
-# ============================================================
+#############################################
+#      Summary table of fitting results     #
+#############################################
 
 Fit_Summary <- data.frame(
   Parameter = c(
@@ -528,7 +529,9 @@ Fit_Summary$Value <- round(Fit_Summary$Value, 3)
 # Print the table
 Fit_Summary
 
-##################################################################################
+#############################################
+# Correlated parameters? Move Tref to ~Tm:  #
+#############################################
 
 # Finding the best Tref:
 Tref_scan <- seq(Tm - 15, Tm + 15, by = 2) + 273.15
@@ -545,4 +548,4 @@ y <- approxfun(Tref_scan - 273.15, r_scan)
 # Find out what temperature gets you a y of zero. Then make that Tref!
 y(43) 
 y(57)
-y(56.79)
+y(56.79) # This one worked for my particular curve (closest to zero). So I made Tref 56.79, and NO MORE CROSS CORRELATED PARAMETERS!
