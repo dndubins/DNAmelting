@@ -3,7 +3,7 @@
 #Original heating-curve section written by: David Dubins
 #Kinetic cooling-curve section added: fits kon (koff derived from kon/Keq(T), Keq(T) fixed by the heating-curve fit)
 #Date: Jan 17, 2026
-#Last Updated: 14-Aug-26
+#Last Updated: 21-Aug-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: polynom 1.4, deSolve
@@ -357,9 +357,6 @@ DNA_ODE <- function(time, state, parameters) {
   list(c(dalpha_dt)) # this is how we hand the derivative back to deSolve.
 }
 
-#This is just a check, not needed. But if it crashes, it's bad news!
-DNA_ODE(0, c(alpha0), parms) # calculate the ODE at time zero. (System is at eq'm, should be close to zero).
-
 #This is the structure of simulating a curve:
 #create a series of times (0 to 900 seconds)
 #sampletimes <- seq(0, 5460, by = 180)
@@ -393,6 +390,9 @@ parms <- c(
   ln_kref = g1,   # trial pre-exponential factor, s^-1
   Ea_off = g2       # trial activation energy, kJ/mol
 )
+
+#This is just a check, not needed. But if it crashes, it's bad news!
+DNA_ODE(0, c(alpha0), parms) # calculate the ODE at time zero. (System is at eq'm, should be close to zero).
 
 #Look at the initial CC_fit1 to adjust ln_k0_off and Ea_off start values:
 CC_start <- CC_fitAlpha(g1, g2)
@@ -470,7 +470,7 @@ ln_kon <- function(Temp,ln_k0_off,Ea_off) {
 Ea_off = CC_fit1$estimate[2]
 Ea_off
 
-#Get ln_kref:
+#Get ln_kref and calculate ln_k0_off:
 ln_kref <- CC_fit1$estimate[1]
 ln_k0_off <- ln_kref + Ea_off*1000/(R*Tref) # This is the true intercept of ln(koff) vs. 1/T
 
@@ -529,11 +529,13 @@ Fit_Summary$Value <- round(Fit_Summary$Value, 3)
 # Print the table
 Fit_Summary
 
+### STOP HERE. The fit is finished! ###
+
 #############################################
 # Correlated parameters? Move Tref to ~Tm:  #
 #############################################
 
-# Finding the best Tref:
+# Finding the best Tref: (If this crashes, you may have hit Tref=Tm on the nose)
 Tref_scan <- seq(Tm - 15, Tm + 15, by = 2) + 273.15
 r_scan <- sapply(Tref_scan, function(Tr) {
   Tref <<- Tr   # ln_koff() reads Tref from the global env
@@ -541,6 +543,7 @@ r_scan <- sapply(Tref_scan, function(Tr) {
   cov.mat <- 2 * fit$minimum / (length(CC_Alpha) - 2) * solve(fit$hessian)
   cov2cor(cov.mat)[1,2]
 })
+
 plot(Tref_scan - 273.15, r_scan, xlab = "Tref (°C)", ylab = "correlation(ln_kref, Ea_off)")
 
 #Interpolate the data using R's very convenient interpolation function:
