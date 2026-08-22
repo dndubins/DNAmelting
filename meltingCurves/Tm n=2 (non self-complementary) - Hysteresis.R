@@ -539,9 +539,14 @@ Fit_Summary
 Tref_scan <- seq(Tm - 15, Tm + 15, by = 2) + 273.15
 r_scan <- sapply(Tref_scan, function(Tr) {
   Tref <<- Tr   # ln_koff() reads Tref from the global env
-  fit <- nlm(chisq, p = parms, hessian = TRUE)
-  cov.mat <- 2 * fit$minimum / (length(CC_Alpha) - 2) * solve(fit$hessian)
-  cov2cor(cov.mat)[1,2]
+  result <- tryCatch({  #tryCatch() will prevent an error from stopping the search
+    fit <- nlm(chisq, p = parms, hessian = TRUE)
+    cov.mat <- 2 * fit$minimum / (length(CC_Alpha) - 2) * solve(fit$hessian)
+    cov2cor(cov.mat)[1,2]
+  }, error = function(e) {
+    NA_real_
+  })
+  result
 })
 
 plot(Tref_scan - 273.15, r_scan, xlab = "Tref (°C)", ylab = "correlation(ln_kref, Ea_off)")
