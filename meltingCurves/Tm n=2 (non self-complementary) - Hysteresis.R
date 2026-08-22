@@ -554,6 +554,6 @@ plot(Tref_scan - 273.15, r_scan, xlab = "Tref (°C)", ylab = "correlation(ln_kre
 #Interpolate the data using R's very convenient interpolation function:
 y <- approxfun(Tref_scan - 273.15, r_scan)
 # Find out what temperature gets you a y of zero. Then make that Tref!
-y(43) 
-y(57)
+y(44) # example result is close to -1.0
+y(57) # example result is closer to zero
 y(56.79) # This one worked for my particular curve (closest to zero). So I made Tref 56.79, and NO MORE CROSS CORRELATED PARAMETERS!
