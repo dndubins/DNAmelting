@@ -1,9 +1,10 @@
 #Tm n=2 (not self-complementary), Hysteresis - Joint Fit.R
 #This script fits TM data assuming D -> SS1 + SS2 (not self-complementary)
-#Original heating-curve section written by: David Dubins
-#Kinetic cooling-curve section added: fits kon (koff derived from kon/Keq(T), Keq(T) fixed by the heating-curve fit)
+#This script was written with assistance from Claude.AI and Perplexity.AI
+#The bottom of the script allows you to simulate different heating and cooling
+#curve rates to predict the change in hysteresis.
 #Date: Jan 17, 2026
-#Last Updated: 21-Aug-26
+#Last Updated: 25-Sep-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: polynom 1.4, deSolve
