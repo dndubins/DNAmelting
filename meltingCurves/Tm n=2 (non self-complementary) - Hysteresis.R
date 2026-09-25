@@ -1,9 +1,10 @@
-#Tm n=2 (not self-complementary), with kinetic fit of cooling curve.R
+#Tm n=2 (non self-complementary) - Hysteresis.R
 #This script fits TM data assuming D -> SS1 + SS2 (not self-complementary)
 #Original heating-curve section written by: David Dubins
+#We assume in this fit that the heating curve is at equilibrium (not a great assumption).
 #Kinetic cooling-curve section added: fits kon (koff derived from kon/Keq(T), Keq(T) fixed by the heating-curve fit)
 #Date: Jan 17, 2026
-#Last Updated: 21-Aug-26
+#Last Updated: 25-Sep-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: polynom 1.4, deSolve
