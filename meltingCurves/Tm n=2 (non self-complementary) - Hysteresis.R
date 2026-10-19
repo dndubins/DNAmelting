@@ -289,7 +289,7 @@ Tm <- HC_fit1$estimate[1]    #Tm from our first fit
 DH <- HC_fit1$estimate[2]    #DH in kJ/mol from our first fit
 #Ct <- 2.0e-6  #2 uM in molar (already defined above)
 #R <- 8.314    #gas constant, J mol^-1 K^-1 (already defined above)
-Tref <- 56.79 + 273.15 # choose a reference temperature not off in space (better for fitting)
+Tref <- Tm + 273.15 # choose a reference temperature not off in space (better for fitting)
 
 # Make Keq a function:
 Keq <- function(Temp) {
