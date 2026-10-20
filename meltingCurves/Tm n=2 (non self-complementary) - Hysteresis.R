@@ -1,10 +1,9 @@
-#Tm n=2 (non self-complementary) - Hysteresis.R
+#Tm n=2 (not self-complementary), with kinetic fit of cooling curve.R
 #This script fits TM data assuming D -> SS1 + SS2 (not self-complementary)
 #Original heating-curve section written by: David Dubins
-#We assume in this fit that the heating curve is at equilibrium (not a great assumption).
 #Kinetic cooling-curve section added: fits kon (koff derived from kon/Keq(T), Keq(T) fixed by the heating-curve fit)
 #Date: Jan 17, 2026
-#Last Updated: 25-Sep-26
+#Last Updated: 19-Oct-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: polynom 1.4, deSolve
@@ -59,10 +58,10 @@
 #Plot the data to decide start and end temperatures for baseline fitting.
 plot(HC$Temperature,HC$Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD", col="red")
 
-Lstart <- 42 # start temperature of lower baseline fit
-Lstop <- 50  # stop temperature of lower baseline fit
-Ustart <- 66 # start temperature of upper baseline fit
-Ustop <- 70  # stop temperature of upper baseline fit
+Lstart <- 30 # start temperature of lower baseline fit
+Lstop <- 35  # stop temperature of lower baseline fit
+Ustart <- 60 # start temperature of upper baseline fit
+Ustop <- 65  # stop temperature of upper baseline fit
 
 #Isolate and fit the lower baseline:
 HC_lowerBL <- HC[(HC[, "Temperature"] >= Lstart & HC[, "Temperature"] <= Lstop), ]
@@ -81,8 +80,9 @@ HC_LowerBLfit <- HC$Temperature * HC_Lslope + HC_Lint
 HC_UpperBLfit <- HC$Temperature * HC_Uslope + HC_Uint
 lines(spline(HC$Temperature, HC_LowerBLfit), col="red")
 lines(spline(HC$Temperature, HC_UpperBLfit), col="red")
+
 #Add cooling curve to plot: (comment out or don't run if it's distracting)
-points(CC$Temperature,CC$Abs, col="blue")
+#points(CC$Temperature,CC$Abs, col="blue")
 
 ###### END OF HEATING CURVE BASELINE FITTING HERE ######
 
@@ -90,10 +90,10 @@ points(CC$Temperature,CC$Abs, col="blue")
 #Plot the data to decide start and end temperatures for baseline fitting.
 plot(CC$Temperature,CC$Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD", col="blue")
 
-Lstart <- 35 # start temperature of lower baseline fit
-Lstop <- 40  # stop temperature of lower baseline fit
-Ustart <- 68 # start temperature of upper baseline fit
-Ustop <- 70  # stop temperature of upper baseline fit
+Lstart <- 30 # start temperature of lower baseline fit
+Lstop <- 35  # stop temperature of lower baseline fit
+Ustart <- 60 # start temperature of upper baseline fit
+Ustop <- 65  # stop temperature of upper baseline fit
 
 #Isolate and fit the lower baseline:
 CC_lowerBL <- CC[(CC[, "Temperature"] >= Lstart & CC[, "Temperature"] <= Lstop), ]
@@ -112,8 +112,9 @@ CC_LowerBLfit <- CC$Temperature * CC_Lslope + CC_Lint
 CC_UpperBLfit <- CC$Temperature * CC_Uslope + CC_Uint
 lines(spline(CC$Temperature, CC_LowerBLfit), col="blue")
 lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
+
 #Add heating curve to plot: (comment out or don't run if it's distracting)
-points(HC$Temperature,HC$Abs, col="red")
+#points(HC$Temperature,HC$Abs, col="red")
 
 ###### END OF COOLING CURVE BASELINE FITTING HERE ######
 
@@ -128,69 +129,26 @@ HC_Alpha <- ((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$T
 
 #Define model parameters
 nr <- 2  #number of roots (also the order of the polynomial to fit)
-points <- dim(HC)[1] #number of data points to fit
-Ct <- 2.0e-6  #2 uM in molar
+Ct <- 1.0e-6  #1 uM in molar
 R <- 8.314    #gas constant, J mol^-1 K^-1
 
-library(polynom) #install the polynom package before loading for the first time
-
-#We need this function to solve for alpha by finding a real root between [0 and 1].
-findReal <- function(roots){  # finds a real root between 0 and 1, or returns 0.
-  validroot <- 0
-  for(j in 1:nr){
-    if(is.complex(roots[j])==FALSE){
-      if(roots[j]>=0 && roots[j]<=1.001){
-        #if(roots[j]>=0){
-        validroot <- roots[j]
-      }
-    } 
-    if(is.complex(roots[j])==TRUE){
-      if(Im(roots[j])==0 && Re(roots[j])>=0 && Re(roots[j])<=1.001){
-        #if(Im(roots[j])==0 && Re(roots[j])>=0){
-        validroot <- Re(roots[j])
-      }
-    }
-  }
-  validroot
+# Closed-form physical root of alpha^2 + b*alpha + 1 = 0, where b = -2 - 2/(Keq*Ct).
+# The two roots multiply to 1, so exactly one lies in [0,1]. That's the smaller one.
+# Written as 2/(-b + sqrt(disc)) rather than (-b - sqrt(disc))/2 because it avoids
+# subtractive cancellation when Keq is small (alpha -> 0). Vectorized over Kval.
+alpha_eq_root <- function(Kval) {
+  b <- -2 - 2/(Kval*Ct)
+  disc <- pmax(b^2 - 4, 0)   # guards tiny negative disc from floating point
+  2 / (-b + sqrt(disc))
 }
 
-#Generalized equilibrium-alpha calculator. Takes any Temp vector instead of being hardwired 
-#to HC$Temperature - used below for the ODE's initial condition, and to overlay the equilibrium
-#curve on the cooling-curve plot):
-
-#Define the function to fit (duplex melting to SS1 + SS2, non self-complementary)
+# Equilibrium alpha vs. temperature (duplex -> SS1 + SS2, non self-complementary)
+# Tm in °C, DH in kJ/mol
 EqAlphafit <- function(Temp, Tm, DH) {
-  #Lint: Lower baseline (intercept)
-  #Lslope: Lower baseline (slope)
-  #Uint: Upper baseline (intercept)
-  #Uslope: Upper baseline (slope)
-  #Kval: Duplex formation equilibrium constant
-  #Ct #initial concentration of single-stranded oligonucleotide SS1 (Ct) in Mol (assume SS1=SS2)
-  #From solving the model:
-  #a = 1
-  #b = -2 - (2/Kval*Ct)
-  #c = 1
-  #Fitting routines have a hard time fitting very small, or very large numbers.
-  #The fitting routine has an easier time with DH input as kJ/mol.
-  
-  #We need to do solve the roots (alpha) one point at a time:
-  for(i in 1:points){
-    Kval <- (4/Ct)*exp(((-DH*1000)/(R*(Temp[i]+273.15)))*(1-(Temp[i]+273.15)/(Tm+273.15)))
-    a <- 1
-    b <- -2 - (2/(Kval*Ct))
-    c <- 1
-    
-    rawroots <- polynomial (c(c,b,a)) #polynomial goes UP in order. Modify this if changing order of polynomial.
-    foundroots <- solve(rawroots)
-    
-    alpha_i <- findReal(foundroots)
-    if(i==1){
-      results <- alpha_i
-    } else {
-      results <- c(results,alpha_i)
-    }
-  }
-  results # return the results from the function
+  T    <- Temp + 273.15
+  Tm_K <- Tm + 273.15
+  Kval <- (4/Ct)*exp(((-DH*1000)/(R*T))*(1 - T/Tm_K))
+  alpha_eq_root(Kval)
 }
 
 #Define the chisq function as (Yobs-Ymodel)^2 (we are going to minimize this)
@@ -206,8 +164,8 @@ plot(
 )
 
 #Play with these initial guesses until the fit gets close.
-g1 <- 59.0  #first guess for Tm.
-g2 <- -510  #first guess for DH in kJ/mol
+g1 <- 50.5  #first guess for Tm.
+g2 <- -710  #first guess for DH in kJ/mol
 
 HC_fittedAlpha <- EqAlphafit(HC$Temperature,g1,g2) # This is the model fit using our first guesses.
 lines(spline(HC$Temperature, HC_fittedAlpha),col="red") # plot the model on the current graph.
@@ -287,9 +245,10 @@ points(HC$Temperature,HC_Alpha, col="red")
 #First define some useful constants from our heating curve fit:
 Tm <- HC_fit1$estimate[1]    #Tm from our first fit
 DH <- HC_fit1$estimate[2]    #DH in kJ/mol from our first fit
-#Ct <- 2.0e-6  #2 uM in molar (already defined above)
+#Ct <- 1.0e-6  #1 uM in molar (already defined above)
 #R <- 8.314    #gas constant, J mol^-1 K^-1 (already defined above)
-Tref <- Tm + 273.15 # choose a reference temperature not off in space (better for fitting)
+Tref <- 50 + 273.15 # choose a reference temperature not off in space (better for fitting)
+#Hard code this Tref and use it in other fitting routines (keep it constant).
 
 # Make Keq a function:
 Keq <- function(Temp) {
@@ -298,7 +257,8 @@ Keq <- function(Temp) {
   (4/Ct) * exp(((-DH*1000)/(R*T)) * (1 - T/Tm_K))
 }
 
-# Shift the time data to the first point being time=0: (might as well reset the clock)
+# Shift the time data to the first point being time=0 for both curves: (might as well reset the clock)
+HC$Time <- HC$Time - HC$Time[1]
 CC$Time <- CC$Time - CC$Time[1]
 
 #Create a function for the cooling curve temperature vs. time data:
@@ -311,7 +271,7 @@ Temp <- function(time) { # this function won't crap out outside time limits.
 #Sanity check:
 Temp(0) # This should be the highest (first) temperature
 Temp(CC$Time[length(CC$Time)]) # This should be the lowest (last) temperature
-Temp(5461) # one second after last data point
+Temp(max(CC$Time)+1) # one second after last data point, should not crash
 
 # This will look "perfect" because the cooling curve was forced to be linear,
 # but with actual observed data, it won't (and doesn't need to) be a straight line.
@@ -334,14 +294,7 @@ ln_koff <- function(Temp,ln_kref,Ea_off) {
 #Now calculate our starting point at the starting temperature (70 degC?):
 Tstart <- CC$Temperature[1] # get starting temperature (=CC$Temperature[1])
 Kt0 <- Keq(Tstart) # calculate starting Keq
-a <- 1 # funky coefficients that are dependent on rxn mechanism.
-b <- -2 - 2/(Kt0*Ct)
-c <- 1
-roots <- polyroot(c(c, b, a))
-roots
-
-#Now find the real root:
-alpha0 <- findReal(roots)
+alpha0 <- alpha_eq_root(Kt0)
 alpha0 # This needs to be a number between 0 and 1 for this fit (it's the first alpha).
 
 #If there is some loose imaginary change left over, get rid of it (visual inspection):
@@ -383,13 +336,13 @@ CC_fitAlpha <- function(p1,p2){
 }
 
 # rough starting guess for ln_kref from your old fit, evaluated at Tref:
-g1 <- -7.9 # first guess for ln_kref
-g2 <- 250 # first guess for Ea_off
+g1 <- -6.65 # first guess for ln_kref - changes location of Tm
+g2 <- 390 # first guess for Ea_off - changes slope at Tm
 
 # Here is our parameter vector, with ln_kref and Ea_off defined starting guesses:
 parms <- c(
-  ln_kref = g1,   # trial pre-exponential factor, s^-1
-  Ea_off = g2       # trial activation energy, kJ/mol
+  ln_kref = g1,   # trial pre-exponential factor, s^-1 - controls midpoint of fit
+  Ea_off = g2       # trial activation energy, kJ/mol - controls slope of fit
 )
 
 #This is just a check, not needed. But if it crashes, it's bad news!
@@ -500,7 +453,8 @@ Fit_Summary <- data.frame(
     "ln(koff0)",
     "Ea_off",
     "ln(kon0)",
-    "Ea_on"
+    "Ea_on",
+    "Tref"
   ),
   
   Value = c(
@@ -510,7 +464,8 @@ Fit_Summary <- data.frame(
     ln_k0_off,
     CC_fit1$estimate[2],
     ln_k0_on,
-    Ea_on
+    Ea_on,
+    Tref-273.15
   ),
   
   Units = c(
@@ -520,7 +475,8 @@ Fit_Summary <- data.frame(
     "dimensionless",
     "kJ/mol",
     "dimensionless",
-    "kJ/mol"
+    "kJ/mol",
+    "°C"
   )
 )
 
@@ -555,6 +511,6 @@ plot(Tref_scan - 273.15, r_scan, xlab = "Tref (°C)", ylab = "correlation(ln_kre
 #Interpolate the data using R's very convenient interpolation function:
 y <- approxfun(Tref_scan - 273.15, r_scan)
 # Find out what temperature gets you a y of zero. Then make that Tref!
-y(44) # example result is close to -1.0
-y(57) # example result is closer to zero
+y(44) 
+y(57)
 y(56.79) # This one worked for my particular curve (closest to zero). So I made Tref 56.79, and NO MORE CROSS CORRELATED PARAMETERS!
