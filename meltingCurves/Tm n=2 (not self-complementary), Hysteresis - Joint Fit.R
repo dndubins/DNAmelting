@@ -7,8 +7,8 @@
 #Last Updated: 19-Oct-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
-#External Libraries used: polynom 1.4, deSolve
-#(Tools -> Install Packages -> select polynom, deSolve)
+#External Libraries used: deSolve
+#(Tools -> Install Packages -> select deSolve)
 #This program expects three columns of data:
 # Time  Temperature   Abs
 # 0 ,    70,         1.39034 (or whatever)
@@ -30,14 +30,14 @@
 #Import the Heating Curve:
 #=========================
 #For PC:
-#HC <- read.table(file="clipboard", header=TRUE)
+HC <- read.table(file="clipboard", header=TRUE)
 #For MacOS:
 #HC <- read.table(pipe("pbpaste"), header=TRUE)
 
 #Import the Cooling Curve:
 #=========================
 #For PC:
-#CC <- read.table(file="clipboard", header=TRUE)
+CC <- read.table(file="clipboard", header=TRUE)
 #For MacOS:
 #CC <- read.table(pipe("pbpaste"), header=TRUE)
 
@@ -130,12 +130,10 @@ HC_Alpha <- ((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$T
 CC_Alpha <- ((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature))
 
 #Define model parameters
-nr <- 2  #number of roots (also the order of the polynomial to fit)
-Ct <- 1.0e-6  #1 uM in molar
+Ct <- 2.0e-6  #2 µM in molar (Should be initial concentration of dsDNA)
 R <- 8.314    #gas constant, J mol^-1 K^-1
 Tref <- 60 + 273.15 # choose a reference temperature not off in space (better for fitting). Make this close to or equal to the Tm.
 
-library(polynom) #install the polynom package before loading for the first time
 library(deSolve) #load the deSolve library, we are going to use it
 
 # Tm and ln_kref fit in natural units; DH and Ea_off are fit in MJ/mol
@@ -164,14 +162,6 @@ ln_koff <- function(Temp,ln_kref,Ea_off_MJ) {
   T <- Temp + 273.15
   ln_kref - (Ea_off_MJ*1000*1000/R)*((1/T) - (1/Tref))
 }
-
-# Given trial (Tm, DH), compute the equilibrium starting alpha at a given start temp
-# This uses polynomial function
-#alpha0_at <- function(Tstart, Tm, DH_MJ) {
-#  Kt0 <- Keq_gen(Tstart, Tm, DH_MJ)
-#  roots <- polyroot(c(1, -2 - 2/(Kt0*Ct), 1))
-#  Re(findReal(roots))  # or just Re(roots[1]) per your fix, whichever you trust more
-#}
 
 # Given trial (Tm, DH), compute the equilibrium starting alpha at a given start temp
 # This uses the first root only, which should be the correct one
