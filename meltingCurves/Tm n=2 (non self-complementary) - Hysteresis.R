@@ -58,10 +58,10 @@
 #Plot the data to decide start and end temperatures for baseline fitting.
 plot(HC$Temperature,HC$Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD", col="red")
 
-Lstart <- 30 # start temperature of lower baseline fit
-Lstop <- 35  # stop temperature of lower baseline fit
-Ustart <- 60 # start temperature of upper baseline fit
-Ustop <- 65  # stop temperature of upper baseline fit
+Lstart <- 42 # start temperature of lower baseline fit
+Lstop <- 50  # stop temperature of lower baseline fit
+Ustart <- 67 # start temperature of upper baseline fit
+Ustop <- 70  # stop temperature of upper baseline fit
 
 #Isolate and fit the lower baseline:
 HC_lowerBL <- HC[(HC[, "Temperature"] >= Lstart & HC[, "Temperature"] <= Lstop), ]
@@ -91,9 +91,9 @@ lines(spline(HC$Temperature, HC_UpperBLfit), col="red")
 plot(CC$Temperature,CC$Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD", col="blue")
 
 Lstart <- 30 # start temperature of lower baseline fit
-Lstop <- 35  # stop temperature of lower baseline fit
-Ustart <- 60 # start temperature of upper baseline fit
-Ustop <- 65  # stop temperature of upper baseline fit
+Lstop <- 40  # stop temperature of lower baseline fit
+Ustart <- 68 # start temperature of upper baseline fit
+Ustop <- 70  # stop temperature of upper baseline fit
 
 #Isolate and fit the lower baseline:
 CC_lowerBL <- CC[(CC[, "Temperature"] >= Lstart & CC[, "Temperature"] <= Lstop), ]
@@ -129,7 +129,7 @@ HC_Alpha <- ((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$T
 
 #Define model parameters
 nr <- 2  #number of roots (also the order of the polynomial to fit)
-Ct <- 1.0e-6  #1 uM in molar
+Ct <- 2.0e-6  #2 uM in molar
 R <- 8.314    #gas constant, J mol^-1 K^-1
 
 # Closed-form physical root of alpha^2 + b*alpha + 1 = 0, where b = -2 - 2/(Keq*Ct).
@@ -164,8 +164,8 @@ plot(
 )
 
 #Play with these initial guesses until the fit gets close.
-g1 <- 50.5  #first guess for Tm.
-g2 <- -710  #first guess for DH in kJ/mol
+g1 <- 58.5  #first guess for Tm.
+g2 <- -600  #first guess for DH in kJ/mol
 
 HC_fittedAlpha <- EqAlphafit(HC$Temperature,g1,g2) # This is the model fit using our first guesses.
 lines(spline(HC$Temperature, HC_fittedAlpha),col="red") # plot the model on the current graph.
@@ -247,7 +247,7 @@ Tm <- HC_fit1$estimate[1]    #Tm from our first fit
 DH <- HC_fit1$estimate[2]    #DH in kJ/mol from our first fit
 #Ct <- 1.0e-6  #1 uM in molar (already defined above)
 #R <- 8.314    #gas constant, J mol^-1 K^-1 (already defined above)
-Tref <- 50 + 273.15 # choose a reference temperature not off in space (better for fitting)
+Tref <- 60 + 273.15 # choose a reference temperature not off in space (better for fitting)
 #Hard code this Tref and use it in other fitting routines (keep it constant).
 
 # Make Keq a function:
@@ -337,7 +337,7 @@ CC_fitAlpha <- function(p1,p2){
 
 # rough starting guess for ln_kref from your old fit, evaluated at Tref:
 g1 <- -6.65 # first guess for ln_kref - changes location of Tm
-g2 <- 390 # first guess for Ea_off - changes slope at Tm
+g2 <- 350 # first guess for Ea_off - changes slope at Tm
 
 # Here is our parameter vector, with ln_kref and Ea_off defined starting guesses:
 parms <- c(
