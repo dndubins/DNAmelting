@@ -4,7 +4,7 @@
 #The bottom of the script allows you to simulate different heating and cooling
 #curve rates to predict the change in hysteresis.
 #Date: Jan 17, 2026
-#Last Updated: 25-Sep-26
+#Last Updated: 19-Oct-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: polynom 1.4, deSolve
@@ -59,10 +59,10 @@
 #Plot the data to decide start and end temperatures for baseline fitting.
 plot(HC$Temperature,HC$Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD", col="red")
 
-Lstart <- 42 # start temperature of lower baseline fit
-Lstop <- 50  # stop temperature of lower baseline fit
-Ustart <- 66 # start temperature of upper baseline fit
-Ustop <- 70  # stop temperature of upper baseline fit
+Lstart <- 30 # start temperature of lower baseline fit
+Lstop <- 37  # stop temperature of lower baseline fit
+Ustart <- 60 # start temperature of upper baseline fit
+Ustop <- 65  # stop temperature of upper baseline fit
 
 #Isolate and fit the lower baseline:
 HC_lowerBL <- HC[(HC[, "Temperature"] >= Lstart & HC[, "Temperature"] <= Lstop), ]
@@ -81,8 +81,9 @@ HC_LowerBLfit <- HC$Temperature * HC_Lslope + HC_Lint
 HC_UpperBLfit <- HC$Temperature * HC_Uslope + HC_Uint
 lines(spline(HC$Temperature, HC_LowerBLfit), col="red")
 lines(spline(HC$Temperature, HC_UpperBLfit), col="red")
+
 #Add cooling curve to plot: (comment out or don't run if it's distracting)
-points(CC$Temperature,CC$Abs, col="blue")
+#points(CC$Temperature,CC$Abs, col="blue")
 
 ###### END OF HEATING CURVE BASELINE FITTING HERE ######
 
@@ -90,10 +91,10 @@ points(CC$Temperature,CC$Abs, col="blue")
 #Plot the data to decide start and end temperatures for baseline fitting.
 plot(CC$Temperature,CC$Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD", col="blue")
 
-Lstart <- 35 # start temperature of lower baseline fit
-Lstop <- 40  # stop temperature of lower baseline fit
-Ustart <- 68 # start temperature of upper baseline fit
-Ustop <- 70  # stop temperature of upper baseline fit
+Lstart <- 30 # start temperature of lower baseline fit
+Lstop <- 37  # stop temperature of lower baseline fit
+Ustart <- 59 # start temperature of upper baseline fit
+Ustop <- 65  # stop temperature of upper baseline fit
 
 #Isolate and fit the lower baseline:
 CC_lowerBL <- CC[(CC[, "Temperature"] >= Lstart & CC[, "Temperature"] <= Lstop), ]
@@ -112,8 +113,9 @@ CC_LowerBLfit <- CC$Temperature * CC_Lslope + CC_Lint
 CC_UpperBLfit <- CC$Temperature * CC_Uslope + CC_Uint
 lines(spline(CC$Temperature, CC_LowerBLfit), col="blue")
 lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
+
 #Add heating curve to plot: (comment out or don't run if it's distracting)
-points(HC$Temperature,HC$Abs, col="red")
+#points(HC$Temperature,HC$Abs, col="red")
 
 ###### END OF COOLING CURVE BASELINE FITTING HERE ######
 
@@ -129,9 +131,9 @@ CC_Alpha <- ((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$T
 
 #Define model parameters
 nr <- 2  #number of roots (also the order of the polynomial to fit)
-Ct <- 2.0e-6  #2 uM in molar
+Ct <- 1.0e-6  #2 uM in molar
 R <- 8.314    #gas constant, J mol^-1 K^-1
-Tref <- 56.79 + 273.15 # choose a reference temperature not off in space (better for fitting)
+Tref <- 50 + 273.15 # choose a reference temperature not off in space (better for fitting). Make this close to or equal to the Tm.
 
 library(polynom) #install the polynom package before loading for the first time
 library(deSolve) #load the deSolve library, we are going to use it
@@ -224,7 +226,8 @@ joint_chisq <- function(p_vec) {
   sum((HC_Alpha - HC_pred)^2) + sum((CC_Alpha - CC_pred)^2)
 }
 
-# Quick equilibrium-only pre-fit, just to get good starting guesses for Tm, DH
+# Option 1:
+# Quick equilibrium-only pre-fit, just to get good starting guesses for Tm, DH (use results from other fitting routines?)
 Eq_alpha_simple <- function(Temp, Tm, DH) { #DH in kJ/mol
   Kt <- Keq_gen(Temp, Tm, DH)
   b <- -2 - 2/(Kt*Ct)
@@ -232,17 +235,54 @@ Eq_alpha_simple <- function(Temp, Tm, DH) { #DH in kJ/mol
   (-b - sqrt(disc)) / 2
 }
 Eq_chisq <- function(p) sum((HC_Alpha - Eq_alpha_simple(HC$Temperature, p[1], p[2]))^2)
-Eq_guess <- nlm(Eq_chisq, p = c(58.5, -0.600))
+g1 <- 50.4 # First guess for Tm
+g2 <- -0.710 # First guess for DH, in kJ/mol
+Eq_guess <- nlm(Eq_chisq, p = c(g1, g2))
 Eq_guess$estimate   # use these as Tm0, DH0 for p0
+p0 <- c(Tm = Eq_guess$estimate[1], DH = Eq_guess$estimate[2],
+        ln_kref = -6.294445 , Ea_off = 0.33)
 
-# Good starting guesses: your existing sequential-fit results
-#p0 <- c(Tm = Eq_guess$estimate[1], DH = Eq_guess$estimate[2],
-#        ln_kref = -6.294445 , Ea_off = 0.33)
+# Option 2:
+# Starting guesses: Brute Force Guessing (for the DIY'er)
+p0 <- c(Tm = 49.7, DH = -0.710,
+        ln_kref = -5.6 , Ea_off = 0.390)
 
-# Good starting guesses: your existing sequential-fit results
-p0 <- c(Tm = 57, DH = -0.5,
-        ln_kref = -6 , Ea_off = 0.3)
+# ---- Visualize the starting guesses before fitting ----
+plot_guess <- function(p_guess) {
+  p_g <- c(Tm = unname(p_guess[1]), DH = unname(p_guess[2]),
+           ln_kref = unname(p_guess[3]), Ea_off = unname(p_guess[4]))
+  
+  HC_guess <- simulate_curve(p_g, HC$Time, HC_Temp)
+  CC_guess <- simulate_curve(p_g, CC$Time, CC_Temp)
+  
+  # Pure equilibrium curve for reference (what you'd see with infinitely slow ramps)
+  Tseq   <- seq(min(HC$Temperature), max(HC$Temperature), length.out = 300)
+  Eq_ref <- Eq_alpha_simple(Tseq, p_g["Tm"], p_g["DH"])
+  
+  plot(HC$Temperature, HC_Alpha, col = "red",
+       xlab = "Temperature (°C)", ylab = expression(alpha),
+       main = "Starting guesses (before fitting)", ylim = c(0, 1))
+  points(CC$Temperature, CC_Alpha, col = "blue")
+  lines(Tseq, Eq_ref, col = "gray50", lty = 2, lwd = 1.5)
+  lines(spline(HC$Temperature, HC_guess), col = "red",  lwd = 2)
+  lines(spline(CC$Temperature, CC_guess), col = "blue", lwd = 2)
+  legend("bottomright",
+         legend = c("Heating data", "Cooling data",
+                    "Heating (guess)", "Cooling (guess)", "Equilibrium (guess)"),
+         col = c("red", "blue", "red", "blue", "gray50"),
+         pch = c(1, 1, NA, NA, NA), lty = c(NA, NA, 1, 1, 2),
+         lwd = c(NA, NA, 2, 2, 1.5), bty = "n")
+  
+  # Numerical score for the guess
+  ss_HC <- sum((HC_Alpha - HC_guess)^2)
+  ss_CC <- sum((CC_Alpha - CC_guess)^2)
+  cat(sprintf("SSR heating: %.5f | SSR cooling: %.5f | total: %.5f\n",
+              ss_HC, ss_CC, ss_HC + ss_CC))
+  invisible(list(HC = HC_guess, CC = CC_guess))
+}
+plot_guess(p0)
 
+# After the starting guesses above give a reasonable fit, perform the actual fit here:
 joint_fit <- nlm(
   joint_chisq,
   p = p0,
@@ -253,7 +293,7 @@ joint_fit <- nlm(
 )
 
 joint_fit$estimate   # your 4 globally-fit parameters
-joint_fit # see the results of the
+joint_fit # see the results of the joint fit
 
 #Calculate Correlation Matrix: Method 1
 joint_cov.mat <- 2 * joint_fit$minimum / (length(HC_Alpha) + length(CC_Alpha) - 4) * solve(joint_fit$hessian)
@@ -282,13 +322,23 @@ names(p) <- c("Tm","DH","ln_kref","Ea_off")
 HC_joint_pred <- simulate_curve(p, HC$Time, HC_Temp)
 CC_joint_pred <- simulate_curve(p, CC$Time, CC_Temp)
 
+# Equilibrium curve from the fitted Tm and DH (infinitely slow ramp)
+Tseq   <- seq(min(HC$Temperature), max(HC$Temperature), length.out = 300)
+Eq_fit <- Eq_alpha_simple(Tseq, p["Tm"], p["DH"])
+
 plot(HC$Temperature, HC_Alpha, col="red", main="Joint kinetic fit: both curves",
-     xlab="Temperature (°C)", ylab=expression(alpha))
+     xlab="Temperature (°C)", ylab=expression(alpha), ylim=c(0, 1))
 points(CC$Temperature, CC_Alpha, col="blue")
+lines(Tseq, Eq_fit, col="gray50", lty=2, lwd=1.5)
 lines(spline(HC$Temperature, HC_joint_pred), col="red", lwd=2)
 lines(spline(CC$Temperature, CC_joint_pred), col="blue", lwd=2)
-legend("bottomleft", legend=c("Heating data","Cooling data","Joint fit"),
-       col=c("red","blue","black"), pch=c(1,1,NA), lty=c(NA,NA,1))
+legend("topright",
+       legend = c("Heating data", "Cooling data",
+                  "Heating (fit)", "Cooling (fit)", "Equilibrium (fit)"),
+       col = c("red", "blue", "red", "blue", "gray50"),
+       pch = c(1, 1, NA, NA, NA), lty = c(NA, NA, 1, 1, 2),
+       lwd = c(NA, NA, 2, 2, 1.5), bty = "n")
+
 
 #############################################
 #   Joint Kinetic Fit — Summary Parameters  #
@@ -325,7 +375,8 @@ Joint_Fit_Summary <- data.frame(
     "ln(koff0)",
     "Ea_off",
     "ln(kon0)",
-    "Ea_on"
+    "Ea_on",
+    "Tref"
   ),
   Value = c(
     Tm,
@@ -334,7 +385,8 @@ Joint_Fit_Summary <- data.frame(
     ln_k0_off,
     Ea_off,
     ln_k0_on,
-    Ea_on
+    Ea_on,
+    Tref-273.15
   ),
   Units = c(
     "°C",
@@ -343,7 +395,8 @@ Joint_Fit_Summary <- data.frame(
     "dimensionless",
     "kJ/mol",
     "dimensionless",
-    "kJ/mol"
+    "kJ/mol",
+    "°C"
   )
 )
 
@@ -357,7 +410,8 @@ eig <- eigen((H + t(H)) / 2, symmetric = TRUE)$values
 eig
 
 
-##### SIMULATION CORNER ####
+
+##### SIMULATION CORNER (Fitting Routine is Done) ####
 T_rate <- 0.5 / 60 # heating (and cooling) rate in °C/min (converted to seconds)
 
 # Create a Linear Ramp Function:
