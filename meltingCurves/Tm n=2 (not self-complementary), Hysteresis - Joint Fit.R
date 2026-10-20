@@ -59,10 +59,10 @@
 #Plot the data to decide start and end temperatures for baseline fitting.
 plot(HC$Temperature,HC$Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD", col="red")
 
-Lstart <- 30 # start temperature of lower baseline fit
-Lstop <- 37  # stop temperature of lower baseline fit
-Ustart <- 60 # start temperature of upper baseline fit
-Ustop <- 65  # stop temperature of upper baseline fit
+Lstart <- 42 # start temperature of lower baseline fit
+Lstop <- 48  # stop temperature of lower baseline fit
+Ustart <- 67 # start temperature of upper baseline fit
+Ustop <- 70  # stop temperature of upper baseline fit
 
 #Isolate and fit the lower baseline:
 HC_lowerBL <- HC[(HC[, "Temperature"] >= Lstart & HC[, "Temperature"] <= Lstop), ]
@@ -92,9 +92,9 @@ lines(spline(HC$Temperature, HC_UpperBLfit), col="red")
 plot(CC$Temperature,CC$Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD", col="blue")
 
 Lstart <- 30 # start temperature of lower baseline fit
-Lstop <- 37  # stop temperature of lower baseline fit
-Ustart <- 59 # start temperature of upper baseline fit
-Ustop <- 65  # stop temperature of upper baseline fit
+Lstop <- 44  # stop temperature of lower baseline fit
+Ustart <- 67 # start temperature of upper baseline fit
+Ustop <- 70  # stop temperature of upper baseline fit
 
 #Isolate and fit the lower baseline:
 CC_lowerBL <- CC[(CC[, "Temperature"] >= Lstart & CC[, "Temperature"] <= Lstop), ]
@@ -131,9 +131,9 @@ CC_Alpha <- ((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$T
 
 #Define model parameters
 nr <- 2  #number of roots (also the order of the polynomial to fit)
-Ct <- 1.0e-6  #2 uM in molar
+Ct <- 1.0e-6  #1 uM in molar
 R <- 8.314    #gas constant, J mol^-1 K^-1
-Tref <- 50 + 273.15 # choose a reference temperature not off in space (better for fitting). Make this close to or equal to the Tm.
+Tref <- 60 + 273.15 # choose a reference temperature not off in space (better for fitting). Make this close to or equal to the Tm.
 
 library(polynom) #install the polynom package before loading for the first time
 library(deSolve) #load the deSolve library, we are going to use it
@@ -226,7 +226,6 @@ joint_chisq <- function(p_vec) {
   sum((HC_Alpha - HC_pred)^2) + sum((CC_Alpha - CC_pred)^2)
 }
 
-# Option 1:
 # Quick equilibrium-only pre-fit, just to get good starting guesses for Tm, DH (use results from other fitting routines?)
 Eq_alpha_simple <- function(Temp, Tm, DH) { #DH in kJ/mol
   Kt <- Keq_gen(Temp, Tm, DH)
@@ -235,17 +234,19 @@ Eq_alpha_simple <- function(Temp, Tm, DH) { #DH in kJ/mol
   (-b - sqrt(disc)) / 2
 }
 Eq_chisq <- function(p) sum((HC_Alpha - Eq_alpha_simple(HC$Temperature, p[1], p[2]))^2)
-g1 <- 50.4 # First guess for Tm
+g1 <- 58.0 # First guess for Tm
 g2 <- -0.710 # First guess for DH, in kJ/mol
 Eq_guess <- nlm(Eq_chisq, p = c(g1, g2))
 Eq_guess$estimate   # use these as Tm0, DH0 for p0
+
+# Option 1: Use the quick fit results above
 p0 <- c(Tm = Eq_guess$estimate[1], DH = Eq_guess$estimate[2],
         ln_kref = -6.294445 , Ea_off = 0.33)
 
 # Option 2:
 # Starting guesses: Brute Force Guessing (for the DIY'er)
-p0 <- c(Tm = 49.7, DH = -0.710,
-        ln_kref = -5.6 , Ea_off = 0.390)
+p0 <- c(Tm = 57.6, DH = -0.588,
+        ln_kref = -5.1 , Ea_off = 0.322)
 
 # ---- Visualize the starting guesses before fitting ----
 plot_guess <- function(p_guess) {
@@ -266,7 +267,7 @@ plot_guess <- function(p_guess) {
   lines(Tseq, Eq_ref, col = "gray50", lty = 2, lwd = 1.5)
   lines(spline(HC$Temperature, HC_guess), col = "red",  lwd = 2)
   lines(spline(CC$Temperature, CC_guess), col = "blue", lwd = 2)
-  legend("bottomright",
+  legend("bottomleft",
          legend = c("Heating data", "Cooling data",
                     "Heating (guess)", "Cooling (guess)", "Equilibrium (guess)"),
          col = c("red", "blue", "red", "blue", "gray50"),
