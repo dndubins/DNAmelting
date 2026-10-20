@@ -128,7 +128,7 @@ lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
 HC_Alpha <- ((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
 
 #Define model parameters
-Ct <- 2.0e-6  #2 uM in molar
+Ct <- 2.0e-6  #2 µM in molar (Should be initial concentration of dsDNA)
 R <- 8.314    #gas constant, J mol^-1 K^-1
 
 # Closed-form physical root of alpha^2 + b*alpha + 1 = 0, where b = -2 - 2/(Keq*Ct).
