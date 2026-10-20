@@ -6,8 +6,8 @@
 #Last Updated: 19-Oct-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
-#External Libraries used: polynom 1.4, deSolve
-#(Tools -> Install Packages -> select polynom, deSolve)
+#External Libraries used: deSolve
+#(Tools -> Install Packages -> select deSolve)
 #This program expects three columns of data:
 # Time  Temperature   Abs
 # 0 ,    70,         1.39034 (or whatever)
@@ -29,14 +29,14 @@
 #Import the Heating Curve:
 #=========================
 #For PC:
-#HC <- read.table(file="clipboard", header=TRUE)
+HC <- read.table(file="clipboard", header=TRUE)
 #For MacOS:
 #HC <- read.table(pipe("pbpaste"), header=TRUE)
 
 #Import the Cooling Curve:
 #=========================
 #For PC:
-#CC <- read.table(file="clipboard", header=TRUE)
+CC <- read.table(file="clipboard", header=TRUE)
 #For MacOS:
 #CC <- read.table(pipe("pbpaste"), header=TRUE)
 
@@ -128,7 +128,6 @@ lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
 HC_Alpha <- ((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
 
 #Define model parameters
-nr <- 2  #number of roots (also the order of the polynomial to fit)
 Ct <- 2.0e-6  #2 uM in molar
 R <- 8.314    #gas constant, J mol^-1 K^-1
 
