@@ -273,7 +273,8 @@ cbind(grid, ssr)   # if ssr barely changes with frac, Ea_off is poorly determine
 
 # Option 2:
 # ================================================
-# Starting guesses: Brute Force Guessing (for the DIY'er)
+# Starting guesses: Brute Force Guessing (to tweak starting guesses)
+# Ea controls slope, ln_kref controls width of hysteresis (smaller = less hysteresis)
 p0 <- c(Tm = 57.6, DH = -0.588,
         ln_kref = -5.1 , Ea_off = 0.322)
 
