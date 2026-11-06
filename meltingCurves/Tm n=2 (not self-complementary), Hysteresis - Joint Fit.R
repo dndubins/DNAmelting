@@ -9,7 +9,7 @@
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: deSolve
 #(Tools -> Install Packages -> select deSolve)
-#This program expects three columns of data:
+#This program expects three columns of data: (the unit of time is seconds)
 # Time  Temperature   Abs
 # 0 ,    70,         1.39034 (or whatever)
 
