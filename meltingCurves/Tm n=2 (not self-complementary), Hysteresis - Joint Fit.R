@@ -3,8 +3,8 @@
 #This script was written with assistance from Claude.AI and Perplexity.AI
 #The bottom of the script allows you to simulate different heating and cooling
 #curve rates to predict the change in hysteresis.
-#Date: Jan 17, 2026
-#Last Updated: 19-Oct-26
+#Date: 17-Jan-26
+#Last Updated: 06-Nov-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: deSolve
@@ -130,9 +130,9 @@ HC_Alpha <- ((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$T
 CC_Alpha <- ((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature))
 
 #Define model parameters
-Ct <- 2.0e-6  #2 µM in molar (Should be initial concentration of dsDNA)
+Ct <- 2.0e-6  #Total concentration of strands, in molar (Ct=(initial [SS1] + [SS2], i.e. 2 × the concentration of each strand). When DNA is in duplex form, there should be Ct/2 mol/L of dsDNA.
 R <- 8.314    #gas constant, J mol^-1 K^-1
-Tref <- 60 + 273.15 # choose a reference temperature not off in space (better for fitting). Make this close to or equal to the Tm.
+Tref <- 56 + 273.15 # choose a reference temperature not off in space (better for fitting). Make this close to or equal to the Tm.
 
 library(deSolve) #load the deSolve library, we are going to use it
 
@@ -223,15 +223,52 @@ Eq_alpha_simple <- function(Temp, Tm, DH) { #DH in kJ/mol
   disc <- pmax(b^2 - 4, 0)
   (-b - sqrt(disc)) / 2
 }
-Eq_chisq <- function(p) sum((HC_Alpha - Eq_alpha_simple(HC$Temperature, p[1], p[2]))^2)
-g1 <- 58.0 # First guess for Tm
-g2 <- -0.710 # First guess for DH, in kJ/mol
-Eq_guess <- nlm(Eq_chisq, p = c(g1, g2))
-Eq_guess$estimate   # use these as Tm0, DH0 for p0
 
-# Option 1: Use the quick fit results above
-p0 <- c(Tm = Eq_guess$estimate[1], DH = Eq_guess$estimate[2],
-        ln_kref = -6.294445 , Ea_off = 0.33)
+# Option 1: Reasonable starting guesses estimated.
+# Temperature at which a smoothed alpha curve crosses a given level:
+cross_T <- function(Temp, Alpha, level) {
+  s  <- smooth.spline(Temp, Alpha)
+  Tg <- seq(min(Temp), max(Temp), length.out = 2000)
+  Tg[which.min(abs(predict(s, Tg)$y - level))]
+}
+
+# Average ramp rate in degC/s:
+ramp_rate <- function(D) (max(D$Temperature) - min(D$Temperature)) / (max(D$Time) - min(D$Time))
+
+# 1. Tm: average of the two alpha = 0.5 crossings; gap = hysteresis width
+Tm_HC <- cross_T(HC$Temperature, HC_Alpha, 0.5)
+Tm_CC <- cross_T(CC$Temperature, CC_Alpha, 0.5)
+Tm0   <- (Tm_HC + Tm_CC) / 2
+gap   <- max(abs(Tm_HC - Tm_CC), 0.1)   # floor avoids divide-by-zero
+
+# 2. DH (MJ/mol, negative as in the model): width between alpha = 0.75 and 0.25.
+#    For a bimolecular melt, ln(27) = 3.296 = |DH|*width/(R*Tm^2).
+#    Kinetics broaden curves, so use the narrower (steeper) of the two.
+width <- function(D, A) abs(cross_T(D$Temperature, A, 0.25) - cross_T(D$Temperature, A, 0.75))
+w     <- min(width(HC, HC_Alpha), width(CC, CC_Alpha))
+DH0   <- -log(27) * R * (Tm0 + 273.15)^2 / w / 1e6
+
+# 3. ln_kref: set Tref = Tm so ln_kref = ln(koff) at Tm.
+#    Linear response near alpha = 0.5: relaxation rate = 3*koff, lag = rate/relaxation rate,
+#    so koff ~ 2*ramp/(3*gap).
+Tref     <- Tm0 + 273.15          # ln_koff() reads this global
+rate     <- mean(c(ramp_rate(HC), ramp_rate(CC)))
+lnkref0  <- log(2 * rate / (3 * gap))
+
+# 4. Ea_off: coarse SSR scan (no fitting). Ea_off is a fraction of |DH|;
+#    ln_kref is scanned +/- 1 as well, since the gap formula is only approximate.
+grid <- expand.grid(frac = c(0.3, 0.5, 0.7, 0.9), dlnk = c(-1, 0, 1))
+ssr  <- apply(grid, 1, function(g)
+  tryCatch(joint_chisq(c(Tm0, DH0, lnkref0 + g["dlnk"], g["frac"] * abs(DH0))),
+           error = function(e) NA_real_))
+best <- grid[which.min(ssr), ]
+
+p0 <- c(Tm = Tm0, DH = DH0,
+        ln_kref = lnkref0 + best$dlnk,
+        Ea_off  = best$frac * abs(DH0))
+p0  # have a look at p0
+cbind(grid, ssr)   # if ssr barely changes with frac, Ea_off is poorly determined
+
 
 # Option 2:
 # Starting guesses: Brute Force Guessing (for the DIY'er)
@@ -272,6 +309,9 @@ plot_guess <- function(p_guess) {
   invisible(list(HC = HC_guess, CC = CC_guess))
 }
 plot_guess(p0)
+
+# Now go back to Option 2, and tweak those numbers until you get a closer fit! Start with these values:
+p0
 
 # After the starting guesses above give a reasonable fit, perform the actual fit here:
 joint_fit <- nlm(
