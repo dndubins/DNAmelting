@@ -3,8 +3,8 @@
 #This script was written with assistance from Claude.AI and Perplexity.AI
 #The bottom of the script allows you to simulate different heating and cooling
 #curve rates to predict the change in hysteresis.
-#Date: 17-Jan-26
-#Last Updated: 06-Nov-26
+#Date: Jan 17, 2026
+#Last Updated: 19-Oct-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: deSolve
@@ -225,6 +225,7 @@ Eq_alpha_simple <- function(Temp, Tm, DH) { #DH in kJ/mol
 }
 
 # Option 1: Reasonable starting guesses estimated.
+# ================================================
 # Temperature at which a smoothed alpha curve crosses a given level:
 cross_T <- function(Temp, Alpha, level) {
   s  <- smooth.spline(Temp, Alpha)
@@ -271,6 +272,7 @@ cbind(grid, ssr)   # if ssr barely changes with frac, Ea_off is poorly determine
 
 
 # Option 2:
+# ================================================
 # Starting guesses: Brute Force Guessing (for the DIY'er)
 p0 <- c(Tm = 57.6, DH = -0.588,
         ln_kref = -5.1 , Ea_off = 0.322)
