@@ -125,15 +125,17 @@ lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
 #This plot needs to be pretty!
 
 #Now calculate Alpha vs. Temperature curves
-# IF ABSORBANCE DECREASES WITH TEMPERATURE:
+
+#Uncomment the appropriate alpha calculation for your experiment.
+# IF ABSORBANCE INCREASES WITH TEMPERATURE (UV Absorbance):
 #Alpha = (Upper baseline - Alpha) / (upper baseline - lower baseline)
 HC_Alpha <- ((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
 CC_Alpha <- ((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature))
 
-# IF ABSORBANCE INCREASES WITH TEMPERATURE (fluorescence):
+# IF ABSORBANCE DECREASES WITH TEMPERATURE: (Fluorescence):
 #Alpha = (Upper baseline - Alpha) / (upper baseline - lower baseline)
-HC_Alpha <- 1-((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
-CC_Alpha <- 1-((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature))
+#HC_Alpha <- 1-((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
+#CC_Alpha <- 1-((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature))
 
 #Define model parameters
 Ct <- 2.0e-6  #Total concentration of strands, in molar (Ct=(initial [SS1] + [SS2], i.e. 2 × the concentration of each strand). When DNA is in duplex form, there should be Ct/2 mol/L of dsDNA.
