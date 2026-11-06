@@ -2,8 +2,8 @@
 #This script fits TM data assuming D -> SS1 + SS2 (not self-complementary)
 #Original heating-curve section written by: David Dubins
 #Kinetic cooling-curve section added: fits kon (koff derived from kon/Keq(T), Keq(T) fixed by the heating-curve fit)
-#Date: Jan 17, 2026
-#Last Updated: 19-Oct-26
+#Date: 17-Jan-26
+#Last Updated: 06-Nov-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: deSolve
@@ -128,7 +128,7 @@ lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
 HC_Alpha <- ((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
 
 #Define model parameters
-Ct <- 2.0e-6  #2 µM in molar (Should be initial concentration of dsDNA)
+Ct <- 2.0e-6  #Total concentration of strands, in molar (Ct=(initial [SS1] + [SS2], i.e. 2 × the concentration of each strand). When DNA is in duplex form, there should be Ct/2 mol/L of dsDNA.
 R <- 8.314    #gas constant, J mol^-1 K^-1
 
 # Closed-form physical root of alpha^2 + b*alpha + 1 = 0, where b = -2 - 2/(Keq*Ct).
