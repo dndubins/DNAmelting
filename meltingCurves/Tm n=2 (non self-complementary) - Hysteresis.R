@@ -59,9 +59,9 @@ CC <- read.table(file="clipboard", header=TRUE)
 #Plot the data to decide start and end temperatures for baseline fitting.
 plot(HC$Temperature,HC$Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD", col="red")
 
-Lstart <- 30 # start temperature of lower baseline fit
-Lstop <- 40  # stop temperature of lower baseline fit
-Ustart <- 59 # start temperature of upper baseline fit
+Lstart <- 43 # start temperature of lower baseline fit
+Lstop <- 47  # stop temperature of lower baseline fit
+Ustart <- 67 # start temperature of upper baseline fit
 Ustop <- 70  # stop temperature of upper baseline fit
 
 #Isolate and fit the lower baseline:
@@ -91,10 +91,10 @@ lines(spline(HC$Temperature, HC_UpperBLfit), col="red")
 #Plot the data to decide start and end temperatures for baseline fitting.
 plot(CC$Temperature,CC$Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD", col="blue")
 
-Lstart <- 25 # start temperature of lower baseline fit
-Lstop <- 37  # stop temperature of lower baseline fit
-Ustart <- 55 # start temperature of upper baseline fit
-Ustop <- 65  # stop temperature of upper baseline fit
+Lstart <- 29 # start temperature of lower baseline fit
+Lstop <- 36  # stop temperature of lower baseline fit
+Ustart <- 66 # start temperature of upper baseline fit
+Ustop <- 70  # stop temperature of upper baseline fit
 
 #Isolate and fit the lower baseline:
 CC_lowerBL <- CC[(CC[, "Temperature"] >= Lstart & CC[, "Temperature"] <= Lstop), ]
@@ -125,22 +125,15 @@ lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
 #This plot needs to be pretty!
 
 #Now calculate Alpha vs. Temperature curves
-
-#Uncomment the appropriate alpha calculation for your experiment.
-# IF ABSORBANCE INCREASES WITH TEMPERATURE (UV Absorbance):
+#This equation works for increasing or decreasing absorbance with temperature, because of the definition of "Upper and "Lower".
 #Alpha = (Upper baseline - Alpha) / (upper baseline - lower baseline)
 HC_Alpha <- ((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
 CC_Alpha <- ((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature))
 
-# IF ABSORBANCE DECREASES WITH TEMPERATURE: (Fluorescence):
-#Alpha = (Upper baseline - Alpha) / (upper baseline - lower baseline)
-#HC_Alpha <- 1-((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
-#CC_Alpha <- 1-((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature))
-
 #Define model parameters
 Ct <- 2.0e-6  #Total concentration of strands, in molar (Ct=(initial [SS1] + [SS2], i.e. 2 × the concentration of each strand). When DNA is in duplex form, there should be Ct/2 mol/L of dsDNA.
 R <- 8.314    #gas constant, J mol^-1 K^-1
-Tref <- 52 + 273.15 # choose a reference temperature not off in space (better for fitting). Make this close to or equal to the Tm.
+Tref <- 55 + 273.15 # choose a reference temperature not off in space (better for fitting). Make this close to or equal to the Tm.
 
 library(deSolve) #load the deSolve library, we are going to use it
 
