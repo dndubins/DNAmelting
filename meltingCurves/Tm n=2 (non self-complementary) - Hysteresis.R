@@ -1,14 +1,15 @@
-#Tm n=2 (not self-complementary), with kinetic fit of cooling curve.R
+#Tm n=2 (not self-complementary), Hysteresis - Joint Fit.R
 #This script fits TM data assuming D -> SS1 + SS2 (not self-complementary)
-#Original heating-curve section written by: David Dubins
-#Kinetic cooling-curve section added: fits kon (koff derived from kon/Keq(T), Keq(T) fixed by the heating-curve fit)
-#Date: 17-Jan-26
-#Last Updated: 06-Nov-26
+#This script was written with assistance from Claude.AI and Perplexity.AI
+#The bottom of the script allows you to simulate different heating and cooling
+#curve rates to predict the change in hysteresis.
+#Date: Jan 17, 2026
+#Last Updated: 19-Oct-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: deSolve
 #(Tools -> Install Packages -> select deSolve)
-#This program expects three columns of data: (the unit of time is seconds)
+#This program expects three columns of data: (the unit of time is in seconds)
 # Time  Temperature   Abs
 # 0 ,    70,         1.39034 (or whatever)
 
@@ -58,9 +59,9 @@ CC <- read.table(file="clipboard", header=TRUE)
 #Plot the data to decide start and end temperatures for baseline fitting.
 plot(HC$Temperature,HC$Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD", col="red")
 
-Lstart <- 42 # start temperature of lower baseline fit
-Lstop <- 50  # stop temperature of lower baseline fit
-Ustart <- 67 # start temperature of upper baseline fit
+Lstart <- 30 # start temperature of lower baseline fit
+Lstop <- 40  # stop temperature of lower baseline fit
+Ustart <- 59 # start temperature of upper baseline fit
 Ustop <- 70  # stop temperature of upper baseline fit
 
 #Isolate and fit the lower baseline:
@@ -90,10 +91,10 @@ lines(spline(HC$Temperature, HC_UpperBLfit), col="red")
 #Plot the data to decide start and end temperatures for baseline fitting.
 plot(CC$Temperature,CC$Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD", col="blue")
 
-Lstart <- 30 # start temperature of lower baseline fit
-Lstop <- 40  # stop temperature of lower baseline fit
-Ustart <- 68 # start temperature of upper baseline fit
-Ustop <- 70  # stop temperature of upper baseline fit
+Lstart <- 25 # start temperature of lower baseline fit
+Lstop <- 37  # stop temperature of lower baseline fit
+Ustart <- 55 # start temperature of upper baseline fit
+Ustop <- 65  # stop temperature of upper baseline fit
 
 #Isolate and fit the lower baseline:
 CC_lowerBL <- CC[(CC[, "Temperature"] >= Lstart & CC[, "Temperature"] <= Lstop), ]
@@ -123,328 +124,290 @@ lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
 #Also considering trimming out garbage data at temperature extremes.
 #This plot needs to be pretty!
 
-#Now calculate Alpha vs. Temperature curve
+#Now calculate Alpha vs. Temperature curves
+# IF ABSORBANCE DECREASES WITH TEMPERATURE:
 #Alpha = (Upper baseline - Alpha) / (upper baseline - lower baseline)
 HC_Alpha <- ((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
+CC_Alpha <- ((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature))
+
+# IF ABSORBANCE INCREASES WITH TEMPERATURE (fluorescence):
+#Alpha = (Upper baseline - Alpha) / (upper baseline - lower baseline)
+HC_Alpha <- 1-((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
+CC_Alpha <- 1-((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature))
 
 #Define model parameters
 Ct <- 2.0e-6  #Total concentration of strands, in molar (Ct=(initial [SS1] + [SS2], i.e. 2 × the concentration of each strand). When DNA is in duplex form, there should be Ct/2 mol/L of dsDNA.
 R <- 8.314    #gas constant, J mol^-1 K^-1
+Tref <- 52 + 273.15 # choose a reference temperature not off in space (better for fitting). Make this close to or equal to the Tm.
 
-# Closed-form physical root of alpha^2 + b*alpha + 1 = 0, where b = -2 - 2/(Keq*Ct).
-# The two roots multiply to 1, so exactly one lies in [0,1]. That's the smaller one.
-# Written as 2/(-b + sqrt(disc)) rather than (-b - sqrt(disc))/2 because it avoids
-# subtractive cancellation when Keq is small (alpha -> 0). Vectorized over Kval.
-alpha_eq_root <- function(Kval) {
-  b <- -2 - 2/(Kval*Ct)
-  disc <- pmax(b^2 - 4, 0)   # guards tiny negative disc from floating point
-  2 / (-b + sqrt(disc))
-}
+library(deSolve) #load the deSolve library, we are going to use it
 
-# Equilibrium alpha vs. temperature (duplex -> SS1 + SS2, non self-complementary)
-# Tm in °C, DH in kJ/mol
-EqAlphafit <- function(Temp, Tm, DH) {
-  T    <- Temp + 273.15
-  Tm_K <- Tm + 273.15
-  Kval <- (4/Ct)*exp(((-DH*1000)/(R*T))*(1 - T/Tm_K))
-  alpha_eq_root(Kval)
-}
+# Tm and ln_kref fit in natural units; DH and Ea_off are fit in MJ/mol
+# (real kJ/mol / 1000) purely for numerical conditioning in nlm — see
+# the summary table section below for the conversion back to kJ/mol.
 
-#Define the chisq function as (Yobs-Ymodel)^2 (we are going to minimize this)
-HC_chisq <- function(p) sum((HC_Alpha - EqAlphafit(HC$Temperature,p[1],p[2]))^2)
-
-#Now plot normalized curve (Alpha vs Temperature) to get initial guesses close.
-plot(
-  HC$Temperature,
-  HC_Alpha,main="Fraction of Duplex vs. Temperature", 
-  xlab="Temperature (°C)", 
-  ylab = expression(alpha ~ "(fraction of duplex)"),
-  col="red"
-)
-
-#Play with these initial guesses until the fit gets close.
-g1 <- 58.5  #first guess for Tm.
-g2 <- -600  #first guess for DH in kJ/mol
-
-HC_fittedAlpha <- EqAlphafit(HC$Temperature,g1,g2) # This is the model fit using our first guesses.
-lines(spline(HC$Temperature, HC_fittedAlpha),col="red") # plot the model on the current graph.
-
-#Do do the actual fit with the starting values we found. This is done
-#by minimizing the function we defined using the starting values we just tried:
-HC_fit1 <- nlm(HC_chisq, p = c(g1, g2), hessian = TRUE) # Minimize chisq starting with initial guesses
-
-#To see the results of the fitting routine:
-HC_fit1
-
-#Now superimpose our minimized fit on a brand new plot:
-# Tm: HC_fit1$estimate[1]
-# DH: HC_fit1$estimate[2]
-plot(
-  HC$Temperature,
-  HC_Alpha,main="Fraction DNA Duplex vs. Temperature", 
-  xlab="Temperature (°C)", 
-  ylab = expression(alpha ~ "(fraction duplex)"),
-  col="red"
-)
-#Calculate then plot fitted heating curve alphas:
-HC_fittedAlpha <- EqAlphafit(HC$Temperature,HC_fit1$estimate[1],HC_fit1$estimate[2])
-lines(spline(HC$Temperature, HC_fittedAlpha),col="red") #add the model fit here
-
-#(Not needed:)
-#We can go back and look at what the fit would look like if we were to convert it back to absorbance:
-plot(HC$Temperature,HC$Abs,main="DNA Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD (260nm)", col="red")
-#Absfit = Upper baseline - alpha*(Upper baseline - Lower baseline)
-HC_Absfity <- (HC_Uint+HC_Uslope*HC$Temperature) - HC_fittedAlpha*((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
-lines(spline(HC$Temperature, HC_Absfity),col="red")
-#Plot the baselines
-HC_LowerBLfit <- HC$Temperature * HC_Lslope + HC_Lint
-HC_UpperBLfit <- HC$Temperature * HC_Uslope + HC_Uint
-lines(spline(HC$Temperature, HC_Absfity),col="red")
-lines(spline(HC$Temperature, HC_LowerBLfit),col="red")
-lines(spline(HC$Temperature, HC_UpperBLfit),col="red")
-
-#Calculate and report the correlation matrix: 
-#(off-diagonal elements > 0.7 --> too many parameters?)
-HC_cov.mat <- 2 * HC_fit1$minimum / (length(HC_Alpha) - 2) * solve(HC_fit1$hessian)
-HC_cor.mat <- cov2cor(HC_cov.mat)
-HC_cor.mat
-
-#Calcualte and report the approximate standard errors of the parameter estimates:
-HC_se <- sqrt(diag(HC_cov.mat))
-HC_se
-
-#Calculate the rsq:
-HC_sstot = sum((HC_Alpha - mean(HC_Alpha))^2)
-HC_sserr = sum((HC_Alpha - HC_fittedAlpha)^2)
-HC_rsq = 1-HC_sserr/HC_sstot
-HC_rsq
-
-#############################################
-#           HALF WAY POINT!!!!              #
-#############################################
-library(deSolve)
-
-#First calculate Alpha vs. Temperature curve (cooling curve)
-#Alpha = (Upper baseline - Alpha) / (upper baseline - lower baseline)
-CC_Alpha <- ((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature))
-
-#Now plot normalized alpha vs. Temp for both curves:
-plot(
-  CC$Temperature,
-  CC_Alpha,
-  main="Fraction DNA Duplex vs. Temperature",
-  xlab="Temperature (°C)",
-  ylab = expression(alpha ~ "(fraction duplex)"),
-  col="blue"
-)
-#plot the normalized heating curve to see hysteresis:
-points(HC$Temperature,HC_Alpha, col="red")
-
-#Time to prepare the ODE fit!
-#First define some useful constants from our heating curve fit:
-Tm <- HC_fit1$estimate[1]    #Tm from our first fit
-DH <- HC_fit1$estimate[2]    #DH in kJ/mol from our first fit
-#Ct <- 1.0e-6  #1 uM in molar (already defined above)
-#R <- 8.314    #gas constant, J mol^-1 K^-1 (already defined above)
-Tref <- 60 + 273.15 # choose a reference temperature not off in space (better for fitting)
-#Hard code this Tref and use it in other fitting routines (keep it constant).
-
-# Make Keq a function:
-Keq <- function(Temp) {
+# Generalize Keq to take trial (Tm, DH) 
+Keq_gen <- function(Temp, Tm, DH_MJ) {
   T <- Temp + 273.15
   Tm_K <- Tm + 273.15
-  (4/Ct) * exp(((-DH*1000)/(R*T)) * (1 - T/Tm_K))
+  (4/Ct) * exp(((-DH_MJ*1000*1000)/(R*T)) * (1 - T/Tm_K))
 }
 
-# Shift the time data to the first point being time=0 for both curves: (might as well reset the clock)
-HC$Time <- HC$Time - HC$Time[1]
-CC$Time <- CC$Time - CC$Time[1]
+# Bounded version to prevent overflow
+#Keq_gen <- function(Temp, Tm, DH) {
+#  T <- Temp + 273.15
+#  Tm_K <- Tm + 273.15
+#  expo <- ((-DH*1000)/(R*T)) * (1 - T/Tm_K)
+#  expo <- pmin(pmax(expo, -700), 700)   # exp() overflows/underflows outside roughly ±709
+#  (4/Ct) * exp(expo)
+#}
 
-#Create a function for the cooling curve temperature vs. time data:
+#Write a function to calculate ln(koff) as a function of temperature.
+#This is our Arrhenius relationship for the rate constant.
+ln_koff <- function(Temp,ln_kref,Ea_off_MJ) {
+  T <- Temp + 273.15
+  ln_kref - (Ea_off_MJ*1000*1000/R)*((1/T) - (1/Tref))
+}
+
+# Given trial (Tm, DH), compute the equilibrium starting alpha at a given start temp
+# This uses the first root only, which should be the correct one
+alpha0_at <- function(Tstart, Tm, DH_MJ) {
+  Kt0 <- Keq_gen(Tstart, Tm, DH_MJ)
+  b <- -2 - 2/(Kt0*Ct)
+  disc <- max(b^2 - 4, 0)   # guard tiny negative disc from floating point at Kt0 -> Inf
+  r1 <- (-b - sqrt(disc)) / 2   # this is always the physical root in [0,1]
+  r2 <- (-b + sqrt(disc)) / 2   # its reciprocal partner, always >= 1
+  r1
+}
+
+# Generalized ODE, all 4 kinetic/thermo params passed in explicitly
+ODE_gen <- function(time, state, parameters, TempFun) {
+  alpha <- state[1]
+  T <- TempFun(time)
+  Tm <- parameters["Tm"]
+  DH <- parameters["DH"]
+  ln_kref <- parameters["ln_kref"]; Ea_off <- parameters["Ea_off"]
+  ln_koff_T <- ln_koff(T, ln_kref, Ea_off)
+  ln_koff_T <- min(ln_koff_T, 700)
+  dalpha_dt <- exp(ln_koff_T) * (Keq_gen(T, Tm, DH)*Ct/2*(1-alpha)^2 - alpha)
+  if (!is.finite(dalpha_dt)) dalpha_dt <- 0   # last-resort net: any NaN/Inf just stalls, doesn't crash
+  list(c(dalpha_dt))
+}
+
+simulate_curve <- function(p, TimeVec, TempFun) {
+  Tstart <- TempFun(TimeVec[1])
+  a0 <- alpha0_at(Tstart, p["Tm"], p["DH"])
+  out <- ode(y = c(alpha = a0), times = TimeVec,
+             func = function(t,y,parms) ODE_gen(t,y,parms,TempFun), parms = p)
+  out[,2]
+}
+
+#Create a function for the heating curve temperature vs. time data:
 #Interpolate the data using R's very convenient interpolation function:
-Temp <- function(time) { # this function won't crap out outside time limits.
+HC_Temp <- function(time) { # this function won't crap out outside time limits.
+  time <- pmin(pmax(time, min(HC$Time)), max(HC$Time))
+  approx(HC$Time, HC$Temperature, xout = time)$y
+}
+
+CC_Temp <- function(time) { # this function won't crap out outside time limits.
   time <- pmin(pmax(time, min(CC$Time)), max(CC$Time))
   approx(CC$Time, CC$Temperature, xout = time)$y
 }
 
-#Sanity check:
-Temp(0) # This should be the highest (first) temperature
-Temp(CC$Time[length(CC$Time)]) # This should be the lowest (last) temperature
-Temp(max(CC$Time)+1) # one second after last data point, should not crash
-
-# This will look "perfect" because the cooling curve was forced to be linear,
-# but with actual observed data, it won't (and doesn't need to) be a straight line.
-plot(
-  CC$Time,
-  Temp(CC$Time),
-  main="Temperature vs. Time (Cooling Curve)",
-  xlab="Time (s)",
-  ylab ="Temperature (°C)",
-  col="blue"
-)
-
-#Write a function to calculate ln(koff) as a function of temperature.
-#This is our Arrhenius relationship for the rate constant.
-ln_koff <- function(Temp,ln_kref,Ea_off) {
-  T <- Temp + 273.15
-  ln_kref - (Ea_off*1000/R)*((1/T) - (1/Tref))
+# Joint objective: sum of squared residuals from BOTH curves, same 4 parameters
+joint_chisq <- function(p_vec) {
+  p <- c(Tm = p_vec[1], DH = p_vec[2], ln_kref = p_vec[3], Ea_off = p_vec[4])
+  HC_pred <- simulate_curve(p, HC$Time, HC_Temp)
+  CC_pred <- simulate_curve(p, CC$Time, CC_Temp)   # your existing cooling Temp()
+  sum((HC_Alpha - HC_pred)^2) + sum((CC_Alpha - CC_pred)^2)
 }
 
-#Now calculate our starting point at the starting temperature (70 degC?):
-Tstart <- CC$Temperature[1] # get starting temperature (=CC$Temperature[1])
-Kt0 <- Keq(Tstart) # calculate starting Keq
-alpha0 <- alpha_eq_root(Kt0)
-alpha0 # This needs to be a number between 0 and 1 for this fit (it's the first alpha).
-
-#If there is some loose imaginary change left over, get rid of it (visual inspection):
-#alpha0 <- Re(roots[1]) # Take the real component of the root that's between 0 and 1.
-
-#Here we define our ordinary diffeq for the deSolve routine to use:
-DNA_ODE <- function(time, state, parameters) {
-  alpha <- state[1] # this means alpha=alpha(t).
-  T <- Temp(time) # This means at whatever time you are currently evaluating, go find the corresponding temperature.
-  ln_kref <- parameters["ln_kref"] # ln_kref is a parameter
-  Ea_off <- parameters["Ea_off"] # Ea_off is a parameter
-  ln_koff_T <- ln_koff(T, ln_kref, Ea_off) # calculate koff_t at this temperature
-  dalpha_dt <- exp(ln_koff_T) * (Keq(T)*Ct/2*(1-alpha)^2 - alpha) # This is our model
-  list(c(dalpha_dt)) # this is how we hand the derivative back to deSolve.
+# Quick equilibrium-only pre-fit, just to get good starting guesses for Tm, DH (use results from other fitting routines?)
+Eq_alpha_simple <- function(Temp, Tm, DH) { #DH in kJ/mol
+  Kt <- Keq_gen(Temp, Tm, DH)
+  b <- -2 - 2/(Kt*Ct)
+  disc <- pmax(b^2 - 4, 0)
+  (-b - sqrt(disc)) / 2
 }
 
-#This is the structure of simulating a curve:
-#create a series of times (0 to 900 seconds)
-#sampletimes <- seq(0, 5460, by = 180)
-#out <- ode(
-#  y = c(alpha = alpha0), # gives the solver our initial condition
-#  times = sampletimes, # our 15-minute cooling experiment, sampled every second (to 900s)
-#  func = DNA_ODE, # gives the solver the differential equation
-#  parms = parms # using parameters "parms" defined above
-#)
-#head(out) # print top of curve
-#tail(out) # print bottom of curve
-
-# Make cooling curve fitting function:
-CC_fitAlpha <- function(p1,p2){
-  pvector <- c(ln_kref = unname(p1),Ea_off = unname(p2)) # build a parameter vector
-  out <- ode(
-    y = c(alpha = alpha0), # gives the solver our initial condition
-    times = CC$Time, # The times from our cooling curve
-    func = DNA_ODE, # gives the solver the differential equation
-    parms = pvector # using parameters "parms" defined above
-  )
-  out[,2] # return only the fitted y-values
+# Option 1: Reasonable starting guesses estimated.
+# ================================================
+# Temperature at which a smoothed alpha curve crosses a given level:
+cross_T <- function(Temp, Alpha, level) {
+  s  <- smooth.spline(Temp, Alpha)
+  Tg <- seq(min(Temp), max(Temp), length.out = 2000)
+  Tg[which.min(abs(predict(s, Tg)$y - level))]
 }
 
-# rough starting guess for ln_kref from your old fit, evaluated at Tref:
-g1 <- -6.65 # first guess for ln_kref - changes location of Tm
-g2 <- 350 # first guess for Ea_off - changes slope at Tm
+# Average ramp rate in degC/s:
+ramp_rate <- function(D) (max(D$Temperature) - min(D$Temperature)) / (max(D$Time) - min(D$Time))
 
-# Here is our parameter vector, with ln_kref and Ea_off defined starting guesses:
-parms <- c(
-  ln_kref = g1,   # trial pre-exponential factor, s^-1 - controls midpoint of fit
-  Ea_off = g2       # trial activation energy, kJ/mol - controls slope of fit
-)
+# 1. Tm: average of the two alpha = 0.5 crossings; gap = hysteresis width
+Tm_HC <- cross_T(HC$Temperature, HC_Alpha, 0.5)
+Tm_CC <- cross_T(CC$Temperature, CC_Alpha, 0.5)
+Tm0   <- (Tm_HC + Tm_CC) / 2
+gap   <- max(abs(Tm_HC - Tm_CC), 0.1)   # floor avoids divide-by-zero
 
-#This is just a check, not needed. But if it crashes, it's bad news!
-DNA_ODE(0, c(alpha0), parms) # calculate the ODE at time zero. (System is at eq'm, should be close to zero).
+# 2. DH (MJ/mol, negative as in the model): width between alpha = 0.75 and 0.25.
+#    For a bimolecular melt, ln(27) = 3.296 = |DH|*width/(R*Tm^2).
+#    Kinetics broaden curves, so use the narrower (steeper) of the two.
+width <- function(D, A) abs(cross_T(D$Temperature, A, 0.25) - cross_T(D$Temperature, A, 0.75))
+w     <- min(width(HC, HC_Alpha), width(CC, CC_Alpha))
+DH0   <- -log(27) * R * (Tm0 + 273.15)^2 / w / 1e6
 
-#Look at the initial CC_fit1 to adjust ln_k0_off and Ea_off start values:
-CC_start <- CC_fitAlpha(g1, g2)
-#Now plot normalized alpha vs. Temp for both curves:
-plot(
-  CC$Temperature,
-  CC_Alpha,
-  main="Fraction DNA Duplex vs. Temperature",
-  xlab="Temperature (°C)",
-  ylab = expression(alpha ~ "(fraction duplex)"),
-  col="blue"
-)
-#plot the first guess:
-lines(spline(CC$Temperature, CC_start),col="blue")
+# 3. ln_kref: set Tref = Tm so ln_kref = ln(koff) at Tm.
+#    Linear response near alpha = 0.5: relaxation rate = 3*koff, lag = rate/relaxation rate,
+#    so koff ~ 2*ramp/(3*gap).
+Tref     <- Tm0 + 273.15          # ln_koff() reads this global
+rate     <- mean(c(ramp_rate(HC), ramp_rate(CC)))
+lnkref0  <- log(2 * rate / (3 * gap))
 
-#####Go back and change the first guesses until you get a reasonable fit by eye!
-# Note: This fit is very sensitive to starting conditions.
+# 4. Ea_off: coarse SSR scan (no fitting). Ea_off is a fraction of |DH|;
+#    ln_kref is scanned +/- 1 as well, since the gap formula is only approximate.
+grid <- expand.grid(frac = c(0.3, 0.5, 0.7, 0.9), dlnk = c(-1, 0, 1))
+ssr  <- apply(grid, 1, function(g)
+  tryCatch(joint_chisq(c(Tm0, DH0, lnkref0 + g["dlnk"], g["frac"] * abs(DH0))),
+           error = function(e) NA_real_))
+best <- grid[which.min(ssr), ]
 
-#Define the chisq function as (Yobs-Ymodel)^2 (we are going to minimize this)
-chisq <- function(p) sum((CC_Alpha - CC_fitAlpha(p[1],p[2]))^2)
+p0 <- c(Tm = Tm0, DH = DH0,
+        ln_kref = lnkref0 + best$dlnk,
+        Ea_off  = best$frac * abs(DH0))
+p0  # have a look at p0
+cbind(grid, ssr)   # if ssr barely changes with frac, Ea_off is poorly determined
 
-#Perform the nlm fit:
-CC_fit1 <- nlm(chisq, p = parms, hessian = TRUE) # Minimize chisq starting with initial guesses
-#To see the results of the fitting routine:
-CC_fit1
 
-#We can have a look at our fit here:
-#Now plot normalized alpha vs. Temp for both curves:
-plot(
-  CC$Temperature,
-  CC_Alpha,
-  main="Fraction DNA Duplex vs. Temperature",
-  xlab="Temperature (°C)",
-  ylab = expression(alpha ~ "(fraction duplex)"),
-  col="blue"
-)
-#plot the normalized heating curve to see hysteresis:
-points(HC$Temperature,HC_Alpha, col="red")
-#add our heating curve fit:
-lines(spline(HC$Temperature, HC_fittedAlpha),col="red") #add the model fit here
-#calculate the fitted cooling curve:
-CC_fittedAlpha <- CC_fitAlpha(CC_fit1$estimate[1], CC_fit1$estimate[2])
-#add our cooling curve fit:
-lines(spline(CC$Temperature, CC_fittedAlpha),col="blue")
+# Option 2:
+# ================================================
+# Starting guesses: Brute Force Guessing (to tweak starting guesses)
+# Ea controls slope, ln_kref controls width of hysteresis (smaller = less hysteresis)
+p0 <- c(Tm = 49.6, DH = -0.685,
+        ln_kref = -5.9, Ea_off = 0.41)
 
-#Calculate and report the correlation matrix: 
-#(off-diagonal elements > 0.7 --> too many parameters?)
-CC_cov.mat <- 2 * CC_fit1$minimum / (length(CC_Alpha) - 2) * solve(CC_fit1$hessian)
-CC_cor.mat <- cov2cor(CC_cov.mat)
-CC_cor.mat
-
-#Calcualte and report the approximate standard errors of the parameter estimates:
-CC_se <- sqrt(diag(CC_cov.mat))
-CC_se
-
-#Calculate the rsq:
-CC_sstot = sum((CC_Alpha - mean(CC_Alpha))^2)
-CC_sserr = sum((CC_Alpha - CC_fittedAlpha)^2)
-CC_rsq = 1-CC_sserr/CC_sstot
-CC_rsq
-
-#Now calculate and report all remaining dependent parameters:
-
-#Write a function to calculate ln(kon) as a function of temperature.
-#This comes from our equilibrium relationship.
-ln_kon <- function(Temp,ln_k0_off,Ea_off) {
-  T <- Temp + 273.15
-  ln_k_off <- (-Ea_off*1000)/(R*T) + ln_k0_off
-  k_off=exp(ln_k_off)
-  k_on=Keq(Temp)*k_off
-  log(k_on) # return ln(k_on)
+# ---- Visualize the starting guesses before fitting ----
+plot_guess <- function(p_guess) {
+  p_g <- c(Tm = unname(p_guess[1]), DH = unname(p_guess[2]),
+           ln_kref = unname(p_guess[3]), Ea_off = unname(p_guess[4]))
+  
+  HC_guess <- simulate_curve(p_g, HC$Time, HC_Temp)
+  CC_guess <- simulate_curve(p_g, CC$Time, CC_Temp)
+  
+  # Pure equilibrium curve for reference (what you'd see with infinitely slow ramps)
+  Tseq   <- seq(min(HC$Temperature), max(HC$Temperature), length.out = 300)
+  Eq_ref <- Eq_alpha_simple(Tseq, p_g["Tm"], p_g["DH"])
+  
+  plot(HC$Temperature, HC_Alpha, col = "red",
+       xlab = "Temperature (°C)", ylab = expression(alpha),
+       main = "Starting guesses (before fitting)", ylim = c(0, 1))
+  points(CC$Temperature, CC_Alpha, col = "blue")
+  lines(Tseq, Eq_ref, col = "gray50", lty = 2, lwd = 1.5)
+  lines(spline(HC$Temperature, HC_guess), col = "red",  lwd = 2)
+  lines(spline(CC$Temperature, CC_guess), col = "blue", lwd = 2)
+  legend("bottomleft",
+         legend = c("Heating data", "Cooling data",
+                    "Heating (guess)", "Cooling (guess)", "Equilibrium (guess)"),
+         col = c("red", "blue", "red", "blue", "gray50"),
+         pch = c(1, 1, NA, NA, NA), lty = c(NA, NA, 1, 1, 2),
+         lwd = c(NA, NA, 2, 2, 1.5), bty = "n")
+  
+  # Numerical score for the guess
+  ss_HC <- sum((HC_Alpha - HC_guess)^2)
+  ss_CC <- sum((CC_Alpha - CC_guess)^2)
+  cat(sprintf("SSR heating: %.5f | SSR cooling: %.5f | total: %.5f\n",
+              ss_HC, ss_CC, ss_HC + ss_CC))
+  invisible(list(HC = HC_guess, CC = CC_guess))
 }
+plot_guess(p0)
 
-#Calculate and Report Ea_on:
-Ea_off = CC_fit1$estimate[2]
-Ea_off
+# Now go back to Option 2, and tweak those numbers until you get a closer fit! Start with these values:
+p0
 
-#Get ln_kref and calculate ln_k0_off:
-ln_kref <- CC_fit1$estimate[1]
-ln_k0_off <- ln_kref + Ea_off*1000/(R*Tref) # This is the true intercept of ln(koff) vs. 1/T
+# After the starting guesses above give a reasonable fit, perform the actual fit here:
+joint_fit <- nlm(
+  joint_chisq,
+  p = p0,
+  hessian = TRUE,
+  ndigit = 10,
+  gradtol = 1e-8,
+  iterlim = 200
+)
 
-#Calculate and Report ln(k0_on) and Ea_on:
-xvals <- 1.0/(CC$Temperature + 273.15)
-yvals <- ln_kon(CC$Temperature,ln_k0_off,Ea_off)
-Arrhenfit <- lm(yvals~xvals)
-Ea_on <- -coef(Arrhenfit)[2]*R / 1000 # This should be Ea_on in kJ/mol
-Ea_on
-ln_k0_on <- coef(Arrhenfit)[1] # This should be ln_k0_on
-ln_k0_on
+joint_fit$estimate   # your 4 globally-fit parameters
+joint_fit # see the results of the joint fit
 
-#Sanity Check: DH = E_on - E_off
-DH
-Ea_on-Ea_off
+#Calculate Correlation Matrix: Method 1
+joint_cov.mat <- 2 * joint_fit$minimum / (length(HC_Alpha) + length(CC_Alpha) - 4) * solve(joint_fit$hessian)
+joint_cor.mat <- cov2cor(joint_cov.mat)
+rownames(joint_cor.mat) <- colnames(joint_cor.mat) <- c("Tm","DH","ln_kref","Ea_off")
+joint_cor.mat
+
+#calculate Correlation Matrix: Method 2
+N <- length(HC_Alpha) + length(CC_Alpha)
+P <- length(joint_fit$estimate)
+rss <- joint_fit$minimum
+sigma2_hat <- rss / (N - P)
+H <- (joint_fit$hessian + t(joint_fit$hessian)) / 2
+joint_cov.mat <- 2 * sigma2_hat * solve(H)
+joint_se <- sqrt(diag(joint_cov.mat))
+joint_cor.mat <- cov2cor(joint_cov.mat)
+joint_cor.mat
+
+joint_se <- sqrt(diag(joint_cov.mat))
+names(joint_se) <- c("Tm","DH","ln_kref","Ea_off")
+joint_se
+
+p <- joint_fit$estimate
+names(p) <- c("Tm","DH","ln_kref","Ea_off")
+
+HC_joint_pred <- simulate_curve(p, HC$Time, HC_Temp)
+CC_joint_pred <- simulate_curve(p, CC$Time, CC_Temp)
+
+# Equilibrium curve from the fitted Tm and DH (infinitely slow ramp)
+Tseq   <- seq(min(HC$Temperature), max(HC$Temperature), length.out = 300)
+Eq_fit <- Eq_alpha_simple(Tseq, p["Tm"], p["DH"])
+
+plot(HC$Temperature, HC_Alpha, col="red", main="Joint kinetic fit: both curves",
+     xlab="Temperature (°C)", ylab=expression(alpha), ylim=c(0, 1))
+points(CC$Temperature, CC_Alpha, col="blue")
+lines(Tseq, Eq_fit, col="gray50", lty=2, lwd=1.5)
+lines(spline(HC$Temperature, HC_joint_pred), col="red", lwd=2)
+lines(spline(CC$Temperature, CC_joint_pred), col="blue", lwd=2)
+legend("topright",
+       legend = c("Heating data", "Cooling data",
+                  "Heating (fit)", "Cooling (fit)", "Equilibrium (fit)"),
+       col = c("red", "blue", "red", "blue", "gray50"),
+       pch = c(1, 1, NA, NA, NA), lty = c(NA, NA, 1, 1, 2),
+       lwd = c(NA, NA, 2, 2, 1.5), bty = "n")
+
 
 #############################################
-#      Summary table of fitting results     #
+#   Joint Kinetic Fit — Summary Parameters  #
 #############################################
 
-Fit_Summary <- data.frame(
+p <- joint_fit$estimate
+names(p) <- c("Tm","DH","ln_kref","Ea_off")
+
+Tm      <- p["Tm"]
+DH      <- p["DH"]*1000
+ln_kref <- p["ln_kref"]
+Ea_off  <- p["Ea_off"]*1000
+
+# --- Derived kinetic/thermodynamic parameters ---
+
+# True intercept of ln(koff) at 1/T = 0 (i.e. koff extrapolated to T -> infinity)
+ln_k0_off <- unname(ln_kref + Ea_off*1000/(R*Tref))
+
+# Ea_on from DH = Ea_on - Ea_off  (van't Hoff / Arrhenius consistency). Answer is in kJ.
+Ea_on <- unname(DH + Ea_off)
+
+# True intercept of ln(kon) at 1/T = 0, derived analytically from
+# ln(kon) = ln(Keq) + ln(koff), combining the Keq_gen and koff Arrhenius forms
+Tm_K <- Tm + 273.15
+ln_k0_on <- unname(log(4/Ct) + DH*1000/(R*Tm_K) + ln_kref + Ea_off*1000/(R*Tref))
+
+# --- Summary table ---
+
+Joint_Fit_Summary <- data.frame(
   Parameter = c(
     "Tm",
     "DH",
@@ -455,18 +418,16 @@ Fit_Summary <- data.frame(
     "Ea_on",
     "Tref"
   ),
-  
   Value = c(
     Tm,
     DH,
-    CC_fit1$estimate[1],
+    ln_kref,
     ln_k0_off,
-    CC_fit1$estimate[2],
+    Ea_off,
     ln_k0_on,
     Ea_on,
     Tref-273.15
   ),
-  
   Units = c(
     "°C",
     "kJ/mol",
@@ -479,37 +440,102 @@ Fit_Summary <- data.frame(
   )
 )
 
-# Format the numbers nicely
-Fit_Summary$Value <- round(Fit_Summary$Value, 3)
+Joint_Fit_Summary$Value <- round(Joint_Fit_Summary$Value, 3)
+Joint_Fit_Summary
 
-# Print the table
-Fit_Summary
+#None of these values should be negative:
+eigen(joint_fit$hessian)$values
+# eigenvalues should be comfortably away from zero.
+eig <- eigen((H + t(H)) / 2, symmetric = TRUE)$values
+eig
 
-### STOP HERE. The fit is finished! ###
 
-#############################################
-# Correlated parameters? Move Tref to ~Tm:  #
-#############################################
 
-# Finding the best Tref: (If this crashes, you may have hit Tref=Tm on the nose)
-Tref_scan <- seq(Tm - 15, Tm + 15, by = 2) + 273.15
-r_scan <- sapply(Tref_scan, function(Tr) {
-  Tref <<- Tr   # ln_koff() reads Tref from the global env
-  result <- tryCatch({  #tryCatch() will prevent an error from stopping the search
-    fit <- nlm(chisq, p = parms, hessian = TRUE)
-    cov.mat <- 2 * fit$minimum / (length(CC_Alpha) - 2) * solve(fit$hessian)
-    cov2cor(cov.mat)[1,2]
-  }, error = function(e) {
-    NA_real_
-  })
-  result
-})
+##### SIMULATION CORNER (Fitting Routine is Done) ####
+T_rate <- 0.5 / 60 # heating (and cooling) rate in °C/min (converted to seconds)
 
-plot(Tref_scan - 273.15, r_scan, xlab = "Tref (°C)", ylab = "correlation(ln_kref, Ea_off)")
+# Create a Linear Ramp Function:
+make_ramp <- function(T_start, ramp_rate) {
+  force(T_start)
+  force(ramp_rate)
+  
+  function(time) {
+    T_start + ramp_rate * time
+  }
+}
 
-#Interpolate the data using R's very convenient interpolation function:
-y <- approxfun(Tref_scan - 273.15, r_scan)
-# Find out what temperature gets you a y of zero. Then make that Tref!
-y(44) 
-y(57)
-y(56.79) # This one worked for my particular curve (closest to zero). So I made Tref 56.79, and NO MORE CROSS CORRELATED PARAMETERS!
+# Now simulate heating and cooling curves:
+
+# Get estimates:
+p <- joint_fit$estimate
+names(p) <- c("Tm", "DH", "ln_kref", "Ea_off")
+
+# Define temperature ranges:
+T_low <- 40
+T_high <- 70
+
+heating_rate <- T_rate     # °C/min
+cooling_rate <- -T_rate    # °C/min
+
+t_heat <- seq(
+  0,
+  (T_high - T_low) / heating_rate,
+  length.out = 1000
+)
+
+t_cool <- seq(
+  0,
+  (T_low - T_high) / cooling_rate,
+  length.out = 1000
+)
+
+# Simulate the heating and cooling curves:
+HC_sim <- simulate_curve(
+  p = p,
+  TimeVec = t_heat,
+  TempFun = make_ramp(T_low, heating_rate)
+)
+
+CC_sim <- simulate_curve(
+  p = p,
+  TimeVec = t_cool,
+  TempFun = make_ramp(T_high, cooling_rate)
+)
+
+# Generate the corresponding temperatures:
+T_heat <- make_ramp(T_low, heating_rate)(t_heat)
+T_cool <- make_ramp(T_high, cooling_rate)(t_cool)
+
+# Plot the curves:
+plot(
+  T_heat, HC_sim,
+  type = "l",
+  col = "red",
+  lwd = 2,
+  xlim = c(T_low, T_high),
+  ylim = c(0, 1),
+  xlab = "Temperature (°C)",
+  ylab = expression(alpha),
+  main = "Simulated kinetic hysteresis"
+)
+
+lines(
+  T_cool, CC_sim,
+  col = "blue",
+  lwd = 2
+)
+
+#Overlay experimental points:
+points(HC$Temperature, HC_Alpha, col="red")
+points(CC$Temperature, CC_Alpha, col="blue")
+
+legend(
+  "topright",
+  legend = c(
+    paste0("Heating: ", heating_rate*60, " °C/min"),
+    paste0("Cooling: ", abs(cooling_rate*60), " °C/min")
+  ),
+  col = c("red", "blue"),
+  lwd = 2,
+  bty = "n"
+)
