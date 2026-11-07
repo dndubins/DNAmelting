@@ -1,6 +1,6 @@
 #Tm n=2 (not self-complementary), Hysteresis - Joint Fit.R
 #This script fits TM data assuming D -> SS1 + SS2 (not self-complementary)
-#This script was written with assistance from Claude.AI and Perplexity.AI
+#This script was written with a lot of assistance from Claude.AI Sonnet 5.5 Medium and Perplexity.AI.
 #The bottom of the script allows you to simulate different heating and cooling
 #curve rates to predict the change in hysteresis.
 #Date: Jan 17, 2026
@@ -459,7 +459,7 @@ Tref_fit    <- Tref            # Tm0 in K, what the fit used. Do NOT overwrite g
 
 # Select ONE of the following (comment out the other):
 Tref_report <- 55 + 273.15      # common reporting temperature (K)
-#Tref_report <- Tref_fit       # or: report at the temperature used for fitting (Tm0)
+#Tref_report <- Tref_fit         # or: report at the temperature used for fitting (Tm0)
 
 
 p <- joint_fit$estimate
@@ -702,5 +702,42 @@ legend(
 )
 
 ################################################################
-# ANALYSIS COMPLETE!                                           #
+#                   ANALYSIS COMPLETE!                         #
 ################################################################
+
+
+##########################################################################
+# APPENDIX: ARRHENIUS EQUATIONS (Written by Claude.AI Sonnet 5.5 Medium) #
+##########################################################################
+
+# Arrhenius form (exponential)
+# koff(T) = koff0 * exp(−Ea_off / RT)
+# kon(T) = kon0 * exp(−Ea_on / RT)
+
+# Log (linear) form, as used in the script:
+# ln koff(T) = ln(koff0) − Ea_off / (R·T)
+# ln kon(T) = ln(kon0) − Ea_on / (R·T)
+
+# In the log-linear form, each is a straight line in ln k vs. 1/T. 
+# The slope is −Ea/R and the intercept at 1/T = 0 is ln(k0). 
+# In the script, ln_k0_off and ln_k0_on are ln(koff0) and ln(kon0), 
+# and Ea_off and Ea_on are the activation energies.
+
+#Equivalent form with a reference temperature (what the fit uses)
+
+#ln koff(T) = ln_kref − (Ea_off/R)·(1/T − 1/Tref)
+
+#This is the same line, re-centered at Tref. That is why:
+
+#ln(koff0) = ln_kref + Ea_off / (R·Tref)
+
+#Equilibrium constant and its link to the rates:
+
+#Keq = kon / koff
+#ln Keq(T) = ln(4/Ct) − (ΔH/R)·(1/T − 1/Tm)
+
+#This is your Keq_gen, with ΔH negative (association enthalpy). 
+#Taking the log of kon = Keq·koff gives:
+  
+#ln(kon0) = ln(4/Ct) + ΔH/(R·Tm) + ln(koff0)
+#Ea_on = ΔH + Ea_off
