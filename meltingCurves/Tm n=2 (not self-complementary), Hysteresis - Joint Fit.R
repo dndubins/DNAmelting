@@ -4,7 +4,7 @@
 #The bottom of the script allows you to simulate different heating and cooling
 #curve rates to predict the change in hysteresis.
 #Date: Jan 17, 2026
-#Last Updated: 06-Nov-26
+#Last Updated: 07-Nov-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: deSolve
