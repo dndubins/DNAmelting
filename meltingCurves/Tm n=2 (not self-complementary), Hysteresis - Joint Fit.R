@@ -151,17 +151,14 @@ lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
 
 #Now calculate Alpha vs. Temperature curves
 #This equation works for increasing or decreasing absorbance with temperature, because of the definition of "Upper and "Lower".
+
 #Alpha = (Upper baseline - Abs) / (Upper baseline - Lower baseline)
 HC_Alpha <- ((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
 CC_Alpha <- ((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature))
 
 #Examine the normalized curves together:
 plot(HC$Temperature,HC_Alpha,main="Alpha vs. Temperature", xlab="Temperature (°C)", ylab = "α (Fraction of SS in Duplex)", col="red")
-lines(spline(HC$Temperature, HC_LowerBLfit), col="red")
-lines(spline(HC$Temperature, HC_UpperBLfit), col="red")
 points(CC$Temperature,CC_Alpha, col="blue")
-lines(spline(CC$Temperature, CC_LowerBLfit), col="blue")
-lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
 legend("bottomleft",
        legend = c("Heating data", "Cooling data"),
        col = c("red", "blue"),
@@ -170,16 +167,24 @@ legend("bottomleft",
 
 #-Does the normalization look good? 
 #-Are the curves roughly parallel? 
-#=Are the baselines flat?
+#-Are the baselines flat?
+#-Visually verify that alpha (fraction of SS in Duplex DNA) goes from 1 to 0 as temperature increases.
+#-If for some reason the curves are backwards, change your baseline definitions, or subtract them from 1:
+#HC_Alpha <- 1 - (((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature)))  # Invert HC
+#CC_Alpha <- 1 - (((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature)))  # Invert CC
 
 ###############################################
 # CHECKPOINT 4: Model Definition (NO ACTION)  #
 ###############################################
 
 #Define model parameters
-Ct <- 2.0e-6  #Total concentration of strands, in molar (Ct=(initial [SS1] + [SS2], i.e. 2 × the concentration of each strand). When DNA is in duplex form, there should be Ct/2 mol/L of dsDNA.
+# Ct is the total concentration of strands in the system (it's a constant). 
+# At any given time, Ct = [SS1] + [SS2] + 2[D].
+# You know Ct, because before you begin, you've added SS1 and SS2 together.
+# When DNA is all in duplex form, there should be Ct/2 mol/L of dsDNA.
+Ct <- 2.0e-6  #Total concentration of strands, in molar (Ct=(initial [SS1] + [SS2], i.e. 2 × the concentration of each strand).
 R <- 8.314    #gas constant, J mol^-1 K^-1
-Tref <- 55 + 273.15 # choose a reference temperature not off in space (better for fitting). Make this close to or equal to the Tm.
+Tref <- NA_real_ # Tref is set automatically in CHECKPOINT 5 (= Tm0, in K)
 
 library(deSolve) #load the deSolve library, we are going to use it
 
@@ -322,8 +327,8 @@ cbind(grid, ssr)   # if ssr barely changes with frac, Ea_off is poorly determine
 p0
 # Ea controls slope, ln_kref controls width of hysteresis (smaller = less hysteresis)
 # Manually change the guesses inside the function below for Tm, DH, ln_kref, and Ea_off:
-p0 <- c(Tm = 57.5, DH = -0.519,
-        ln_kref = -6.0, Ea_off = 0.2)
+p0 <- c(Tm = 57.4, DH = -0.54,
+        ln_kref = -5.9, Ea_off = 0.32)
 # Now execute CHECKPOINT 7 (visualize the refined guesses).
 
 ##########################################################
@@ -432,20 +437,44 @@ legend("topright",
        pch = c(1, 1, NA, NA, NA), lty = c(NA, NA, 1, 1, 2),
        lwd = c(NA, NA, 2, 2, 1.5), bty = "n")
 
+# Inspect the output of joint_fit. We are hoping for a $code [1] or [2] ([3] is ok but not great) 
+# Inspect joint_cor.mat, we are hoping for no NaN's and nothing greater than 1.0.
+# If the fit is poor, go back to CHECKPOINT 6, change your starting guesses, then try
+# CHECKPOINT 7 and then CHECKPOINT 8 again.
+# Sometimes it's better to be close, but not bang on with your guesses.
+
+#####################################################################
+# CHECKPOINT 9: ROLL UP AND REPORT THE FINAL RESULTS (USER ACTION)  #
+#####################################################################
+
 #Joint Kinetic Fit — Summary Parameters (The "final" answer)
+#Run this line to store Tref:
+Tref_fit    <- Tref            # Tm0 in K, what the fit used. Do NOT overwrite global Tref.
+
+# The fit used a reference temperature Tref_fit (= Tm0 from CHECKPOINT 5, in K).
+# ln_kref is ln(koff) at THAT temperature, so it can't be compared between experiments.
+# For comparisons, report koff at a common temperature, Tref_report, the same for all
+# experiments. Choose a round number close to the Tms of everything being compared.
+# ln(koff0) and ln(kon0) (Arrhenius intercepts) do not depend on either Tref.
+
+# Select ONE of the following (comment out the other):
+Tref_report <- 55 + 273.15      # common reporting temperature (K)
+#Tref_report <- Tref_fit       # or: report at the temperature used for fitting (Tm0)
+
 
 p <- joint_fit$estimate
 names(p) <- c("Tm","DH","ln_kref","Ea_off")
-
 Tm      <- p["Tm"]
 DH      <- p["DH"]*1000
-ln_kref <- p["ln_kref"]
+ln_kref <- p["ln_kref"]  # ln(koff) at Tref_fit
 Ea_off  <- p["Ea_off"]*1000
 
 # --- Derived kinetic/thermodynamic parameters ---
 
-# True intercept of ln(koff) at 1/T = 0 (i.e. koff extrapolated to T -> infinity)
-ln_k0_off <- unname(ln_kref + Ea_off*1000/(R*Tref))
+# Tref-independent intercept, using the Tref the fit was actually done at
+ln_k0_off <- unname(ln_kref + Ea_off*1000/(R*Tref_fit))
+# ln(koff) at the common reporting temperature
+ln_kref_report <- unname(ln_k0_off - Ea_off*1000/(R*Tref_report))
 
 # Ea_on from DH = Ea_on - Ea_off  (van't Hoff / Arrhenius consistency). Answer is in kJ.
 Ea_on <- unname(DH + Ea_off)
@@ -453,45 +482,92 @@ Ea_on <- unname(DH + Ea_off)
 # True intercept of ln(kon) at 1/T = 0, derived analytically from
 # ln(kon) = ln(Keq) + ln(koff), combining the Keq_gen and koff Arrhenius forms
 Tm_K <- Tm + 273.15
-ln_k0_on <- unname(log(4/Ct) + DH*1000/(R*Tm_K) + ln_kref + Ea_off*1000/(R*Tref))
+ln_k0_on <- unname(log(4/Ct) + DH*1000/(R*Tm_K) + ln_k0_off)
 
 # --- Summary table ---
 
+koff_report <- exp(ln_kref_report)   # s^-1 at Tref_report
+
+# --- Standard errors (delta method) ---
+# joint_cov.mat is in FIT units: (Tm [°C], DH [MJ/mol], ln_kref, Ea_off [MJ/mol])
+# For a derived quantity f, SE = sqrt(g' V g), where g = gradient of f wrt those 4 parameters.
+V <- joint_cov.mat
+se_of <- function(g) sqrt(drop(t(g) %*% V %*% g))
+
+Tm_K_u <- unname(Tm_K)
+DH_J   <- unname(DH) * 1000      # DH is in kJ/mol here, so this is J/mol
+
+se_Tm        <- se_of(c(1, 0, 0, 0))                                   # °C
+se_DH        <- se_of(c(0, 1, 0, 0)) * 1000                            # kJ/mol
+se_ln_kref_r <- se_of(c(0, 0, 1, 1e6/R * (1/Tref_fit - 1/Tref_report)))
+se_koff      <- koff_report * se_ln_kref_r                             # first-order: dk = k * d(ln k)
+se_ln_k0_off <- se_of(c(0, 0, 1, 1e6/(R*Tref_fit)))
+se_Ea_off    <- se_of(c(0, 0, 0, 1)) * 1000                            # kJ/mol
+se_ln_k0_on  <- se_of(c(-DH_J/(R*Tm_K_u^2), 1e6/(R*Tm_K_u), 1, 1e6/(R*Tref_fit)))
+se_Ea_on     <- se_of(c(0, 1, 0, 1)) * 1000                            # kJ/mol
+
+# Calculate kon:
+# ln(kon) and kon at the common reporting temperature (M^-1 s^-1)
+ln_kon_report <- unname(ln_k0_on - Ea_on*1000/(R*Tref_report))
+kon_report    <- exp(ln_kon_report)
+# Calculate the standard error for kon:
+# ln_kon_report = ln(4/Ct) + DH/(R·Tm_K) + ln_kref + Ea_off/(R·Tref_fit) − (DH+Ea_off)/(R·Tref_report)
+se_ln_kon_r <- se_of(c(-DH_J/(R*Tm_K_u^2),                    # d/dTm
+                       1e6/R * (1/Tm_K_u - 1/Tref_report),    # d/dDH
+                       1,                                     # d/dln_kref
+                       1e6/R * (1/Tref_fit - 1/Tref_report))) # d/dEa_off
+se_kon <- kon_report * se_ln_kon_r                            # first-order
+
+
+
+# --- Summary table ---
 Joint_Fit_Summary <- data.frame(
-  Parameter = c(
-    "Tm",
-    "DH",
-    "ln(kref)",
-    "ln(koff0)",
-    "Ea_off",
-    "ln(kon0)",
-    "Ea_on",
-    "Tref"
-  ),
-  Value = c(
-    Tm,
-    DH,
-    ln_kref,
-    ln_k0_off,
-    Ea_off,
-    ln_k0_on,
-    Ea_on,
-    Tref-273.15
-  ),
-  Units = c(
-    "°C",
-    "kJ/mol",
-    "dimensionless",
-    "dimensionless",
-    "kJ/mol",
-    "dimensionless",
-    "kJ/mol",
-    "°C"
-  )
+  Parameter = c("Tm", "DH",
+                "ln(koff) at Tref (report)", "koff",
+                "ln(kon) at Tref (report)",  "kon",
+                "ln(koff0)", "Ea_off", "ln(kon0)", "Ea_on",
+                "Tref (report)", "Tref (fit)"),
+  Value = unname(c(Tm, DH,
+                   ln_kref_report, koff_report,
+                   ln_kon_report,  kon_report,
+                   ln_k0_off, Ea_off, ln_k0_on, Ea_on,
+                   Tref_report - 273.15, Tref_fit - 273.15)),
+  SE    = c(se_Tm, se_DH,
+            se_ln_kref_r, se_koff,
+            se_ln_kon_r,  se_kon,
+            se_ln_k0_off, se_Ea_off, se_ln_k0_on, se_Ea_on,
+            NA, NA),                      # Tref values are chosen, not fitted
+  Units = c("°C", "kJ/mol",
+            "ln(s^-1)", "s^-1",
+            "ln(M^-1 s^-1)", "M^-1 s^-1",
+            "ln(s^-1)", "kJ/mol", "ln(M^-1 s^-1)", "kJ/mol",
+            "°C", "°C")
 )
 
-Joint_Fit_Summary$Value <- round(Joint_Fit_Summary$Value, 3)
-Joint_Fit_Summary
+# Format each row individually (decimals per row; NA = scientific notation)
+dec <- c(2,   # Tm
+         1,   # DH
+         3,   # ln(koff) at Tref (report)
+         NA,  # koff (scientific)
+         3,   # ln(kon) at Tref (report)
+         NA,  # kon (scientific)
+         3,   # ln(koff0)
+         1,   # Ea_off
+         3,   # ln(kon0)
+         1,   # Ea_on
+         2,   # Tref (report)
+         2)   # Tref (fit)
+
+fmt <- function(v, d, extra = 0) {
+  if (is.na(v)) return("-")
+  if (is.na(d)) formatC(v, format = "e", digits = 3)
+  else          formatC(v, format = "f", digits = d + extra)
+}
+
+Joint_Fit_Summary$Value <- mapply(fmt, Joint_Fit_Summary$Value, dec)
+Joint_Fit_Summary$SE    <- mapply(fmt, Joint_Fit_Summary$SE,    dec, MoreArgs = list(extra = 1))
+
+print(Joint_Fit_Summary, row.names = FALSE, right = TRUE)
 
 #None of these values should be negative:
 eigen(joint_fit$hessian)$values
@@ -529,9 +605,9 @@ R2_CC
 #--------END OF FITTING ROUTINE!----------#
 
 
-################################################################
-# CHECKPOINT 9: SIMULATING FITS (Not part of fitting routine)  #
-################################################################
+#################################################################
+# CHECKPOINT 10: SIMULATING FITS (Not part of fitting routine)  #
+#################################################################
 
 # This part of the program takes your fitted parameters above and test drives them.
 # You can change the heating/cooling rate and see what happens to hysteresis.
