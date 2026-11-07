@@ -4,7 +4,7 @@
 #The bottom of the script allows you to simulate different heating and cooling
 #curve rates to predict the change in hysteresis.
 #Date: Jan 17, 2026
-#Last Updated: 19-Oct-26
+#Last Updated: 06-Nov-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: deSolve
@@ -23,6 +23,12 @@
 # 6. Calculate dependent parameters
 # 7. Plot results
 
+##################################################
+# CHECKPOINT 1: READ IN THE DATA. (USER ACTION)  #
+# Note: Only import data you want to fit.        #
+# Truncate long, noisy, and drifting baselines.  #
+##################################################
+
 #Read in the data (Temperature, Abs)
 #Uncomment the appropriate lines below for your platform.
 #Select the data in Excel, press Ctrl+C, then run the appropriate line.
@@ -40,6 +46,10 @@ HC <- read.table(file="clipboard", header=TRUE)
 CC <- read.table(file="clipboard", header=TRUE)
 #For MacOS:
 #CC <- read.table(pipe("pbpaste"), header=TRUE)
+
+##################################################
+# CHECKPOINT 2: FIT THE BASELINES. (USER ACTION) #
+##################################################
 
 #Heating Curve: Bring your own baselines
 #Enter the lower and upper baselines for the heating curve data (Fit using MS Excel):
@@ -119,16 +129,49 @@ lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
 
 ###### END OF COOLING CURVE BASELINE FITTING HERE ######
 
-#NOTE: FINALIZE THE BASELINES before proceeding.
-#Visually examine the baselines. Are they nice? If not, change limits above.
-#Also considering trimming out garbage data at temperature extremes.
-#This plot needs to be pretty!
+#Examine the heating curve and the cooling curve with baselines together:
+plot(HC$Temperature,HC$Abs,main="Absorbance vs. Temperature", xlab="Temperature (°C)", ylab = "OD", col="red")
+lines(spline(HC$Temperature, HC_LowerBLfit), col="red")
+lines(spline(HC$Temperature, HC_UpperBLfit), col="red")
+points(CC$Temperature,CC$Abs, col="blue")
+lines(spline(CC$Temperature, CC_LowerBLfit), col="blue")
+lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
+
+#NOTE: FINALIZE THE BASELINES before proceeding. This plot needs to be pretty!
+#Do your baselines look like they make sense? If not:
+# -Consider going back to CHECKPOINT 1 and truncate the data
+# -Go back to CHECKPOINT 2 and re-fit the baselines.
+
+#################################################################
+# CHECKPOINT 3: Calculate and Review Alpha Curves (USER ACTION) #
+#################################################################
 
 #Now calculate Alpha vs. Temperature curves
 #This equation works for increasing or decreasing absorbance with temperature, because of the definition of "Upper and "Lower".
 #Alpha = (Upper baseline - Alpha) / (upper baseline - lower baseline)
 HC_Alpha <- ((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
 CC_Alpha <- ((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature))
+
+#Examine the normalized curves together:
+plot(HC$Temperature,HC_Alpha,main="Alpha vs. Temperature", xlab="Temperature (°C)", ylab = "α (Fraction of SS in Duplex)", col="red")
+lines(spline(HC$Temperature, HC_LowerBLfit), col="red")
+lines(spline(HC$Temperature, HC_UpperBLfit), col="red")
+points(CC$Temperature,CC_Alpha, col="blue")
+lines(spline(CC$Temperature, CC_LowerBLfit), col="blue")
+lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
+legend("bottomleft",
+       legend = c("Heating data", "Cooling data"),
+       col = c("red", "blue"),
+       pch = c(1, 1), lty = c(NA, NA),
+       lwd = c(NA, NA), bty = "n")
+
+#-Does the normalization look good? 
+#-Are the curves roughly parallel? 
+#=Are the baselines flat?
+
+###############################################
+# CHECKPOINT 4: Model Definition (NO ACTION)  #
+###############################################
 
 #Define model parameters
 Ct <- 2.0e-6  #Total concentration of strands, in molar (Ct=(initial [SS1] + [SS2], i.e. 2 × the concentration of each strand). When DNA is in duplex form, there should be Ct/2 mol/L of dsDNA.
@@ -147,15 +190,6 @@ Keq_gen <- function(Temp, Tm, DH_MJ) {
   Tm_K <- Tm + 273.15
   (4/Ct) * exp(((-DH_MJ*1000*1000)/(R*T)) * (1 - T/Tm_K))
 }
-
-# Bounded version to prevent overflow
-#Keq_gen <- function(Temp, Tm, DH) {
-#  T <- Temp + 273.15
-#  Tm_K <- Tm + 273.15
-#  expo <- ((-DH*1000)/(R*T)) * (1 - T/Tm_K)
-#  expo <- pmin(pmax(expo, -700), 700)   # exp() overflows/underflows outside roughly ±709
-#  (4/Ct) * exp(expo)
-#}
 
 #Write a function to calculate ln(koff) as a function of temperature.
 #This is our Arrhenius relationship for the rate constant.
@@ -225,8 +259,12 @@ Eq_alpha_simple <- function(Temp, Tm, DH) { #DH in kJ/mol
   (-b - sqrt(disc)) / 2
 }
 
-# Option 1: Reasonable starting guesses estimated.
-# ================================================
+########################################################
+# CHECKPOINT 5: Calculate Starting Guesses (NO ACTION) #
+########################################################
+
+# The routine will try to estimate reasonable starting guesses.
+# ========================-------==============================
 # Temperature at which a smoothed alpha curve crosses a given level:
 cross_T <- function(Temp, Alpha, level) {
   s  <- smooth.spline(Temp, Alpha)
@@ -271,15 +309,25 @@ p0 <- c(Tm = Tm0, DH = DH0,
 p0  # have a look at p0
 cbind(grid, ssr)   # if ssr barely changes with frac, Ea_off is poorly determined
 
+# ---> SKIP CHECKPOINT 6 for now (you will go back to it later). Proceed directly to CHECKPOINT 7!
 
-# Option 2:
-# ================================================
-# Starting guesses: Brute Force Guessing (to tweak starting guesses)
+######################################################################
+# CHECKPOINT 6: Manual Refinement of Starting Guesses (USER ACTION)  #
+######################################################################
+
+# Here are the last guesses I tried from CHECKPOINT 5:
+p0
 # Ea controls slope, ln_kref controls width of hysteresis (smaller = less hysteresis)
-p0 <- c(Tm = 49.6, DH = -0.685,
-        ln_kref = -5.9, Ea_off = 0.41)
+# Manually change the guesses inside the function below for Tm, DH, ln_kref, and Ea_off:
+p0 <- c(Tm = 57.5, DH = -0.519,
+        ln_kref = -6.0, Ea_off = 0.2)
+# Now execute CHECKPOINT 7 (visualize the refined guesses).
 
-# ---- Visualize the starting guesses before fitting ----
+##########################################################
+# CHECKPOINT 7: Visualize Starting Guesses (USER REVIEW) #
+##########################################################
+
+# Visualize the starting guesses before fitting:
 plot_guess <- function(p_guess) {
   p_g <- c(Tm = unname(p_guess[1]), DH = unname(p_guess[2]),
            ln_kref = unname(p_guess[3]), Ea_off = unname(p_guess[4]))
@@ -314,10 +362,15 @@ plot_guess <- function(p_guess) {
 }
 plot_guess(p0)
 
-# Now go back to Option 2, and tweak those numbers until you get a closer fit! Start with these values:
-p0
+# Now go back to CHECKPOINT 6, and tweak the guesses until you get a closer fit.
+# Good starting guesses are very important for the fitting routine to be successful.
+# When you are happy with the fit (close enough), proceed to CHECKPOINT 8.
 
-# After the starting guesses above give a reasonable fit, perform the actual fit here:
+########################################################
+# CHECKPOINT 8: RUN THE FITTING ROUTINE (USER REVIEW)  #
+########################################################
+
+# Perform the actual fit here:
 joint_fit <- nlm(
   joint_chisq,
   p = p0,
@@ -326,6 +379,8 @@ joint_fit <- nlm(
   gradtol = 1e-8,
   iterlim = 200
 )
+#This step may take several seconds to minutes depending on
+#the data set and quality of the starting guesses.
 
 joint_fit$estimate   # your 4 globally-fit parameters
 joint_fit # see the results of the joint fit
@@ -374,10 +429,7 @@ legend("topright",
        pch = c(1, 1, NA, NA, NA), lty = c(NA, NA, 1, 1, 2),
        lwd = c(NA, NA, 2, 2, 1.5), bty = "n")
 
-
-#############################################
-#   Joint Kinetic Fit — Summary Parameters  #
-#############################################
+#Joint Kinetic Fit — Summary Parameters (The "final" answer)
 
 p <- joint_fit$estimate
 names(p) <- c("Tm","DH","ln_kref","Ea_off")
@@ -444,10 +496,45 @@ eigen(joint_fit$hessian)$values
 eig <- eigen((H + t(H)) / 2, symmetric = TRUE)$values
 eig
 
+#Calculate the global r^2 value:
+HC_joint_pred <- simulate_curve(p, HC$Time, HC_Temp)
+CC_joint_pred <- simulate_curve(p, CC$Time, CC_Temp)
+# Combine observed and predicted values
+obs  <- c(HC_Alpha, CC_Alpha)
+pred <- c(HC_joint_pred, CC_joint_pred)
 
+#Now calculate the r^2 coefficeint of determination for the global and individual fits:
+SS_res <- sum((obs - pred)^2)
+SS_tot <- sum((obs - mean(obs))^2)
 
-##### SIMULATION CORNER (Fitting Routine is Done) ####
-T_rate <- 0.5 / 60 # heating (and cooling) rate in °C/min (converted to seconds)
+R2 <- 1 - SS_res/SS_tot
+# r^2 value of global fit:
+R2
+
+#Calculate the Heating Curve and Cooling Curve r^2 values separately:
+R2_HC <- 1 - sum((HC_Alpha - HC_joint_pred)^2) /
+  sum((HC_Alpha - mean(HC_Alpha))^2)
+
+R2_CC <- 1 - sum((CC_Alpha - CC_joint_pred)^2) /
+  sum((CC_Alpha - mean(CC_Alpha))^2)
+
+# r^2 value of heating curve fit:
+R2_HC
+# r^2 value of cooling curve fit:
+R2_CC
+
+#--------END OF FITTING ROUTINE!----------#
+
+  
+################################################################
+# CHECKPOINT 9: SIMULATING FITS (Not part of fitting routine)  #
+################################################################
+
+# This part of the program takes your fitted parameters above and test drives them.
+# You can change the heating/cooling rate and see what happens to hysteresis.
+# Your original data will still be plotted on the graph.
+
+T_rate <- 0.5 / 60 # Change the heating (and cooling) rate here in °C/min (converted to seconds)
 
 # Create a Linear Ramp Function:
 make_ramp <- function(T_start, ramp_rate) {
@@ -534,3 +621,7 @@ legend(
   lwd = 2,
   bty = "n"
 )
+
+################################################################
+# ANALYSIS COMPLETE!                                           #
+################################################################
