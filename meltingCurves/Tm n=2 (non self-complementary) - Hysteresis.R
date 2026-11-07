@@ -148,7 +148,7 @@ lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
 
 #Now calculate Alpha vs. Temperature curves
 #This equation works for increasing or decreasing absorbance with temperature, because of the definition of "Upper and "Lower".
-#Alpha = (Upper baseline - Alpha) / (upper baseline - lower baseline)
+#Alpha = (Upper baseline - Abs) / (Upper baseline - Lower baseline)
 HC_Alpha <- ((HC_Uint+HC_Uslope*HC$Temperature)-HC$Abs)/((HC_Uint+HC_Uslope*HC$Temperature)-(HC_Lint+HC_Lslope*HC$Temperature))
 CC_Alpha <- ((CC_Uint+CC_Uslope*CC$Temperature)-CC$Abs)/((CC_Uint+CC_Uslope*CC$Temperature)-(CC_Lint+CC_Lslope*CC$Temperature))
 
