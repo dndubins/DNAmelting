@@ -51,6 +51,9 @@ CC <- read.table(file="clipboard", header=TRUE)
 # CHECKPOINT 2: FIT THE BASELINES. (USER ACTION) #
 ##################################################
 
+# The "lower baseline" (Lint + Lslope*T) is the lower temperature baseline - a linear fit of the data at low temperatures.
+# The "upper baseline" (Uint + Uslope*T) is the lower temperature baseline - a linear fit of the data at low temperatures.
+
 #Heating Curve: Bring your own baselines
 #Enter the lower and upper baselines for the heating curve data (Fit using MS Excel):
 #HC_Lint <- 14759.2277210086   #first guess for Lint
@@ -139,7 +142,7 @@ lines(spline(CC$Temperature, CC_UpperBLfit), col="blue")
 
 #NOTE: FINALIZE THE BASELINES before proceeding. This plot needs to be pretty!
 #Do your baselines look like they make sense? If not:
-# -Consider going back to CHECKPOINT 1 and truncate the data
+# -Consider going back to CHECKPOINT 1 and truncating the data.
 # -Go back to CHECKPOINT 2 and re-fit the baselines.
 
 #################################################################
