@@ -4,7 +4,7 @@
 #The bottom of the script allows you to simulate different heating and cooling
 #curve rates to predict the change in hysteresis.
 #Date: Jan 17, 2026
-#Last Updated: 07-Nov-26
+#Last Updated: 08-Nov-26
 #Platform: R-Studio 2026.01.0 Build 392, on R version 4.5.2
 #With Assistance From: ChatGPT Luna 5.6, Claude.AI Sonnet 5
 #External Libraries used: deSolve
@@ -325,7 +325,11 @@ cbind(grid, ssr)   # if ssr barely changes with frac, Ea_off is poorly determine
 
 # Here are the last guesses I tried from CHECKPOINT 5:
 p0
-# Ea controls slope, ln_kref controls width of hysteresis (smaller = less hysteresis)
+# Tm is the temperature at which alpha=0.5 at equilibrium (should be midpoint)
+# DH controls the width (slope) of the alpha curve at each curve at the transition
+# ln_kref is ln(koff) at Tref; it controls width of hysteresis (smaller = less hysteresis)
+# Ea sets how hysteresis changes with temperature (also controls slope and shape of curve)
+
 # Manually change the guesses inside the function below for Tm, DH, ln_kref, and Ea_off:
 p0 <- c(Tm = 57.4, DH = -0.54,
         ln_kref = -5.9, Ea_off = 0.32)
@@ -736,8 +740,15 @@ legend(
 #Keq = kon / koff
 #ln Keq(T) = ln(4/Ct) − (ΔH/R)·(1/T − 1/Tm)
 
-#This is your Keq_gen, with ΔH negative (association enthalpy). 
+#This is Keq_gen, with ΔH negative (association enthalpy). 
 #Taking the log of kon = Keq·koff gives:
-  
+
 #ln(kon0) = ln(4/Ct) + ΔH/(R·Tm) + ln(koff0)
 #Ea_on = ΔH + Ea_off
+
+# Ultimately, we are fitting:
+# dα/dt = kon(T)·(Ct/2)(1−α)² − koff(T)·α
+# After substitutions, the equation becomes:
+# dα/dt = koff(T)·[ Keq(T)·(Ct/2)(1−α)² − α ]
+# dα/dt = exp[ ln_kref − (Ea_off/R)(1/T − 1/Tref) ] × ( 2·exp[ −(ΔH/R)(1/T − 1/Tm) ]·(1−α)² − α )
+# This is the function ODE_gen() in the program.
