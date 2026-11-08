@@ -260,7 +260,7 @@ joint_chisq <- function(p_vec) {
 }
 
 # Quick equilibrium-only pre-fit, just to get good starting guesses for Tm, DH (use results from other fitting routines?)
-Eq_alpha_simple <- function(Temp, Tm, DH) { #DH in kJ/mol
+Eq_alpha_simple <- function(Temp, Tm, DH) { #DH in MJ/mol
   Kt <- Keq_gen(Temp, Tm, DH)
   b <- -2 - 2/(Kt*Ct)
   disc <- pmax(b^2 - 4, 0)
