@@ -727,24 +727,22 @@ legend(
 # In the script, ln_k0_off and ln_k0_on are ln(koff0) and ln(kon0), 
 # and Ea_off and Ea_on are the activation energies.
 
-#Equivalent form with a reference temperature (what the fit uses)
+# Equivalent form with a reference temperature (what the fit uses)
+# ln koff(T) = ln_kref − (Ea_off/R)·(1/T − 1/Tref)
 
-#ln koff(T) = ln_kref − (Ea_off/R)·(1/T − 1/Tref)
+# This is the same line, re-centered at Tref. That is why:
+# ln(koff0) = ln_kref + Ea_off / (R·Tref)
 
-#This is the same line, re-centered at Tref. That is why:
+# Equilibrium constant and its link to the rates:
 
-#ln(koff0) = ln_kref + Ea_off / (R·Tref)
+# Keq = kon / koff
+# ln Keq(T) = ln(4/Ct) − (ΔH/R)·(1/T − 1/Tm)
 
-#Equilibrium constant and its link to the rates:
+# This is Keq_gen, with ΔH negative (association enthalpy). 
+# Taking the log of kon = Keq·koff gives:
 
-#Keq = kon / koff
-#ln Keq(T) = ln(4/Ct) − (ΔH/R)·(1/T − 1/Tm)
-
-#This is Keq_gen, with ΔH negative (association enthalpy). 
-#Taking the log of kon = Keq·koff gives:
-
-#ln(kon0) = ln(4/Ct) + ΔH/(R·Tm) + ln(koff0)
-#Ea_on = ΔH + Ea_off
+# ln(kon0) = ln(4/Ct) + ΔH/(R·Tm) + ln(koff0)
+# Ea_on = ΔH + Ea_off
 
 # Ultimately, we are fitting:
 # dα/dt = kon(T)·(Ct/2)(1−α)² − koff(T)·α
