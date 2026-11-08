@@ -235,7 +235,8 @@ simulate_curve <- function(p, TimeVec, TempFun) {
   Tstart <- TempFun(TimeVec[1])
   a0 <- alpha0_at(Tstart, p["Tm"], p["DH"])
   out <- ode(y = c(alpha = a0), times = TimeVec,
-             func = function(t,y,parms) ODE_gen(t,y,parms,TempFun), parms = p)
+             func = function(t,y,parms) ODE_gen(t,y,parms,TempFun), parms = p,
+             rtol = 1e-8, atol = 1e-10)
   out[,2]
 }
 
@@ -260,7 +261,7 @@ joint_chisq <- function(p_vec) {
 }
 
 # Quick equilibrium-only pre-fit, just to get good starting guesses for Tm, DH (use results from other fitting routines?)
-Eq_alpha_simple <- function(Temp, Tm, DH) { #DH in MJ/mol
+Eq_alpha_simple <- function(Temp, Tm, DH) { #DH in kJ/mol
   Kt <- Keq_gen(Temp, Tm, DH)
   b <- -2 - 2/(Kt*Ct)
   disc <- pmax(b^2 - 4, 0)
@@ -317,7 +318,8 @@ p0 <- c(Tm = Tm0, DH = DH0,
 p0  # have a look at p0
 cbind(grid, ssr)   # if ssr barely changes with frac, Ea_off is poorly determined
 
-# ---> SKIP CHECKPOINT 6 for now (you will go back to it later). Proceed directly to CHECKPOINT 7!
+# ---> SKIP CHECKPOINT 6 for now (you will come back to it later). 
+#      On the first pass, proceed directly to CHECKPOINT 7!
 
 ######################################################################
 # CHECKPOINT 6: Manual Refinement of Starting Guesses (USER ACTION)  #
