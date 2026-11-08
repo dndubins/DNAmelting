@@ -51,8 +51,8 @@ CC <- read.table(file="clipboard", header=TRUE)
 # CHECKPOINT 2: FIT THE BASELINES. (USER ACTION) #
 ##################################################
 
-# The "lower baseline" (Lint + Lslope*T) is the lower temperature baseline - a linear fit of the data at low temperatures.
-# The "upper baseline" (Uint + Uslope*T) is the lower temperature baseline - a linear fit of the data at low temperatures.
+# The "lower baseline" (Lint + Lslope*T) is the lower temperature baseline - a linear fit of the data at the lowest temperatures.
+# The "upper baseline" (Uint + Uslope*T) is the upper temperature baseline - a linear fit of the data at highest temperatures.
 
 #Heating Curve: Bring your own baselines
 #Enter the lower and upper baselines for the heating curve data (Fit using MS Excel):
